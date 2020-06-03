@@ -790,11 +790,105 @@ func rejectCapex(c *gin.Context) {
 	})
 }
 
-func register(c *gin.Context) {
+func updateUser(c *gin.Context) {
+	id := c.MustGet("ID").(float64)
+	if id == 0 {
+		c.AbortWithError(http.StatusNotFound, errors.New("User unknown"))
+		c.JSON(http.StatusNotFound, gin.H{
+			"message": "User unknown",
+		})
+		return
+	}
+
+	updatePassBody := struct {
+		CurrentPassword string `json:"currentPassword"`
+		NewPassword     string `json:"newPassword"`
+	}{}
+
+	c.BindJSON(&updatePassBody)
+
+	var user User
+	if err := db.Where("id = ?", id).First(&user).Error; err != nil {
+		c.AbortWithError(http.StatusNotFound, errors.New("UserID not exists"))
+		c.JSON(http.StatusNotFound, gin.H{
+			"message": "UserID not exists",
+		})
+		return
+	}
+
+	err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(updatePassBody.CurrentPassword))
+	if err != nil {
+		c.AbortWithError(http.StatusBadRequest, errors.New("Incorrect Password"))
+		c.JSON(http.StatusNotFound, gin.H{
+			"message": "Incorrect Password",
+		})
+		return
+	}
+
+	if updatePassBody.NewPassword != "" {
+		hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(updatePassBody.NewPassword), bcrypt.DefaultCost)
+		user.Password = string(hashedPassword)
+	}
+
+	err = db.Save(&user).Error
+	if err != nil {
+		c.AbortWithError(http.StatusInternalServerError, err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "User Profile Updated",
+	})
+	return
+}
+
+func getUser(c *gin.Context) {
+	id := c.MustGet("ID").(float64)
+
+	userID := c.Param("id")
+	if id == 0 {
+		c.AbortWithError(http.StatusNotFound, errors.New("User unknown"))
+		c.JSON(http.StatusNotFound, gin.H{
+			"message": "User unknown",
+		})
+		return
+	}
+
+	if strconv.Itoa(int(id)) != userID {
+		c.AbortWithError(http.StatusForbidden, errors.New("Unauthorized to view this profile"))
+		c.JSON(http.StatusForbidden, gin.H{
+			"message": "Unauthorized to view this profile",
+		})
+		return
+	}
+
+	var user User
+
+	if err := db.Where("id = ?", id).First(&user).Error; err != nil {
+		c.AbortWithError(http.StatusNotFound, errors.New("UserID not exists"))
+		c.JSON(http.StatusNotFound, gin.H{
+			"message": "UserID not exists",
+		})
+		return
+	}
+
+	user.Password = ""
+	user.CreatedAt = time.Time{}
+	user.UpdatedAt = time.Time{}
+	user.DeletedAt = &time.Time{}
+
+	c.JSON(http.StatusOK, &user)
+	return
+}
+
+func createUser(c *gin.Context) {
 	var user User
 	var currentUser User
 	c.BindJSON(&user)
-	if err := db.Debug().Where("username = ?", user.Username).First(&currentUser).Error; err == nil {
+	if err := db.Where("username = ?", user.Username).First(&currentUser).Error; err == nil {
 		c.AbortWithError(http.StatusNotFound, errors.New("Username already exists"))
 		c.JSON(http.StatusNotFound, gin.H{
 			"message": "Username already exists",
@@ -805,6 +899,7 @@ func register(c *gin.Context) {
 	user.Password = string(hashedPassword)
 	db.Create(&user)
 	c.JSON(201, user)
+	return
 }
 
 func login(c *gin.Context) {
@@ -850,12 +945,14 @@ func login(c *gin.Context) {
 		ID       uint   `json:"id"`
 		Name     string `json:"name"`
 		Username string `json:"username"`
+		Email    string `json:"email"`
 		Token    string `json:"token"`
 	}{}
 
 	respondBodyLogin.ID = user.ID
 	respondBodyLogin.Name = user.Name
 	respondBodyLogin.Username = user.Username
+	respondBodyLogin.Email = user.Email
 	respondBodyLogin.Token, err = token.SignedString([]byte(signatureKey))
 	if err != nil {
 		c.AbortWithError(http.StatusNotFound, err)
@@ -866,7 +963,7 @@ func login(c *gin.Context) {
 	}
 
 	c.JSON(200, respondBodyLogin)
-
+	return
 }
 
 func notifApprover(trxID uint, approverID uint) {

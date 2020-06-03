@@ -102,7 +102,9 @@ func main() {
 	r.GET("/rules", getRules)
 	r.GET("/createInfo", getCreateInfo)
 	r.POST("/reject", rejectCapex)
-	r.POST("/register", register)
+	r.GET("/user/:id", getUser)
+	r.PUT("/user/:id", updateUser)
+	r.POST("/user", createUser)
 	r.POST("/login", login)
 
 	r.Run(":" + portApp)

@@ -86,11 +86,10 @@ type Purpose struct {
 
 type User struct {
 	gorm.Model
-	Username   string `json:"username"`
-	Email      string `json:"email"`
-	Name       string `json:"name"`
-	Password   string `json:"password"`
-	Position   string `json:"position"`
-	PayrollID  string `json:"payrollID"`
-	Accounting string `sql:"type:ENUM('X', '')" json:"Accounting"`
+	Username  string `json:"username"`
+	Email     string `json:"email"`
+	Name      string `json:"name"`
+	Password  string `json:"password"`
+	Position  string `json:"position"`
+	PayrollID string `json:"payrollID"`
 }
