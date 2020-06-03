@@ -36,7 +36,7 @@ import (
 // }
 
 // SendEmail ... Function to send email
-func SendEmail(to []string, subject string, templateHTML string, bodyVar map[string]string) {
+func SendEmail(to []string, subject string, templateHTML string, bodyVar interface{}) {
 
 	const mailServerUsername string = "fotocopy@sidomuncul.co.id"
 	const mailServerPassword string = "SidoMuncul2018"
@@ -54,15 +54,7 @@ func SendEmail(to []string, subject string, templateHTML string, bodyVar map[str
 
 	body.Write([]byte(fmt.Sprintf("From: %s\nSubject: %s\n%s\n\n", sender, subject, headers)))
 
-	err = t.Execute(&body, struct {
-		Name    string
-		CapexID string
-		Message string
-	}{
-		Name:    bodyVar["Name"],
-		CapexID: bodyVar["CapexID"],
-		Message: bodyVar["Message"],
-	})
+	err = t.Execute(&body, bodyVar)
 	if err != nil {
 		log.Println(err.Error())
 	}

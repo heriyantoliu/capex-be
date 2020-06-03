@@ -881,12 +881,13 @@ func notifApprover(trxID uint, approverID uint) {
 	// to = append(to, user.Email)
 	to = append(to, user.Email)
 
-	bodyVar := map[string]string{
-		"Name":    user.Name,
-		"CapexID": strconv.Itoa(int(trxID)),
-	}
-
-	notification.SendEmail(to, subject, "approval.html", bodyVar)
+	notification.SendEmail(to, subject, "approval.html", struct {
+		Name    string
+		CapexID string
+	}{
+		Name:    user.Name,
+		CapexID: strconv.Itoa(int(trxID)),
+	})
 }
 
 func notifAccounting(trxID uint) {
@@ -902,12 +903,13 @@ func notifAccounting(trxID uint) {
 		to = append(to, user.Email)
 	}
 
-	bodyVar := map[string]string{
-		"Name":    "Accounting Team",
-		"CapexID": strconv.Itoa(int(trxID)),
-	}
-
-	notification.SendEmail(to, subject, "accounting-appr.html", bodyVar)
+	notification.SendEmail(to, subject, "accounting-appr.html", struct {
+		Name    string
+		CapexID string
+	}{
+		Name:    "Accounting Team",
+		CapexID: strconv.Itoa(int(trxID)),
+	})
 }
 
 func notifReject(trxID uint, message string) {
@@ -926,13 +928,11 @@ func notifReject(trxID uint, message string) {
 	to := []string{user.Email}
 	subject := "Reject Capex " + strconv.Itoa(int(trxID))
 
-	bodyVar := map[string]string{
-		"Name":    user.Name,
-		"CapexID": strconv.Itoa(int(trxID)),
-		"Message": message,
-	}
-
-	notification.SendEmail(to, subject, "reject-capex.html", bodyVar)
+	notification.SendEmail(to, subject, "reject-capex.html", struct {
+		Name    string
+		CapexID string
+		Message string
+	}{Name: user.Name, CapexID: strconv.Itoa(int(trxID)), Message: message})
 
 }
 
@@ -952,12 +952,13 @@ func notifFullApprove(trxID uint) {
 	to := []string{user.Email}
 	subject := "Capex " + strconv.Itoa(int(trxID)) + " Full Approved"
 
-	bodyVar := map[string]string{
-		"Name":    user.Name,
-		"CapexID": strconv.Itoa(int(trxID)),
-	}
-
-	notification.SendEmail(to, subject, "full-approve.html", bodyVar)
+	notification.SendEmail(to, subject, "full-approve.html", struct {
+		Name    string
+		CapexID string
+	}{
+		Name:    user.Name,
+		CapexID: strconv.Itoa(int(trxID)),
+	})
 
 }
 
