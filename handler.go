@@ -168,8 +168,9 @@ func getRules(c *gin.Context) {
 	for _, rule := range userRules {
 		ruleBody.Rule = append(ruleBody.Rule, rule.Rule)
 	}
-	c.SetCookie("testCookie", "ABCDEF", 0, "/", "localhost", true, true)
+
 	c.JSON(200, ruleBody)
+	return
 }
 
 func getCapexTrx(c *gin.Context) {
@@ -303,6 +304,12 @@ func createCapexTrx(c *gin.Context) {
 
 	capexTrx.CreatedBy = uint(id)
 
+	var user User
+
+	_ = db.Where("ID = ?", id).First(&user).Error
+
+	capexTrx.RequestorPosition = user.Position
+
 	remainingAmount := struct {
 		Remaining uint64
 	}{}
@@ -403,8 +410,15 @@ func updateCapexTrx(c *gin.Context) {
 	capexTrx.ACCApproved = "X"
 	capexTrx.Status = "I"
 
+	var unbudgeted bool = false
+	if capexTrx.BudgetType == "U" {
+		unbudgeted = false
+	} else {
+		unbudgeted = true
+	}
+
 	var approval []Approval
-	err = db.Where("departement = ? and asset_type = ? and unbudgeted = ? and it = ? and amount_low <= ? and amount_high >= ?", "IT", "IT01", 0, 1, capexTrx.TotalAmount, capexTrx.TotalAmount).
+	err = db.Where("departement = ? and asset_type = ? and unbudgeted = ? and it = ? and amount_low <= ? and amount_high >= ?", capexTrx.RequestorPosition, capexTrx.AssetClass, unbudgeted, 1, capexTrx.TotalAmount, capexTrx.TotalAmount).
 		Order("seq").
 		Find(&approval).
 		Error
