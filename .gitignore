@@ -2,3 +2,4 @@ capex
 gin-bin
 CAPEX/*
 .env
+*.exe
