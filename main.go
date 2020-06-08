@@ -59,15 +59,6 @@ func init() {
 		log.Fatal("Signature key not defined")
 	}
 
-	SMTPAddress = os.Getenv("smtpAddress")
-	if SMTPAddress == "" {
-		log.Fatal("SMTP Address not defined")
-	}
-
-	SMTPUsername = os.Getenv("smtpUsername")
-	if SMTPUsername == "" {
-		log.Fatal("SMTP Username not defined")
-	}
 	initDb()
 }
 
