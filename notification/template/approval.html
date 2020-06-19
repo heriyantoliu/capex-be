@@ -4,8 +4,31 @@
 	</head>
 	<body>
 		<div>
-			Dear Bapak/Ibu {{.Name}} <br />
-			Mohon untuk persetujuan capex no. {{.CapexID}}
+			Hi, our Sidomuncul Capex Online system have a message for you. <br />
+			Capex ID {{.CapexID}} has been update from {{.Sender}}, please approve
+			:<br /><br />
+			<table>
+				<tr>
+					<td>Budget Code</td>
+					<td>:</td>
+					<td>{{.BudgetCode}}</td>
+				</tr>
+				<tr>
+					<td>Budget</td>
+					<td>:</td>
+					<td style="text-align: right;">{{.BudgetAmount}}</td>
+				</tr>
+				<tr>
+					<td>Amount Assigned</td>
+					<td>:</td>
+					<td style="text-align: right;">{{.CapexAmount}}</td>
+				</tr>
+				<tr>
+					<td>Budget Available</td>
+					<td>:</td>
+					<td style="text-align: right;">{{.BudgetAvailable}}</td>
+				</tr>
+			</table>
 		</div>
 	</body>
 </html>

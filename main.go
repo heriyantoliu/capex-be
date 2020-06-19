@@ -16,7 +16,6 @@ import (
 )
 
 var usernameDB, passwordDB, addressDB, portDB, dbName, portApp, signatureKey string
-var SMTPAddress, SMTPUsername string
 
 func init() {
 	err := godotenv.Load()

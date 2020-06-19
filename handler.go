@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
+	"github.com/dustin/go-humanize"
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/mysql"
@@ -377,7 +378,7 @@ func createCapexTrx(c *gin.Context) {
 }
 
 func updateCapexTrx(c *gin.Context) {
-	_, err := validateID(c)
+	id, err := validateID(c)
 	if err != nil {
 		return
 	}
@@ -480,7 +481,7 @@ func updateCapexTrx(c *gin.Context) {
 		return
 	}
 
-	go notifApprover(capexTrx.ID, capexTrx.NextApproval)
+	go notifApprover(capexTrx.ID, capexTrx.NextApproval, uint(id))
 
 	c.JSON(200, capexTrx)
 	return
@@ -624,7 +625,7 @@ func approveCapex(c *gin.Context) {
 					// })
 					// return
 				} else {
-					go notifApprover(capexTrx.ID, appr.Approver)
+					go notifApprover(capexTrx.ID, appr.Approver, uint(id))
 				}
 				break
 			}
@@ -980,7 +981,7 @@ func login(c *gin.Context) {
 	return
 }
 
-func notifApprover(trxID uint, approverID uint) {
+func notifApprover(trxID uint, approverID uint, sender uint) {
 	to := []string{}
 	subject := "Capex " + strconv.Itoa(int(trxID))
 	var user User
@@ -992,13 +993,45 @@ func notifApprover(trxID uint, approverID uint) {
 	// to = append(to, user.Email)
 	to = append(to, user.Email)
 
+	user = User{}
+	_ = db.Where("ID = ?", sender).First(&user).Error
+
+	var capexTrx CapexTrx
+	_ = db.Where("ID = ?", trxID).First(&capexTrx).Error
+
+	budget := struct {
+		BudgetAmount int
+		Remaining    int
+	}{}
+
+	db.Table("tb_budget").
+		Select("budget_amount, remaining").
+		Where("budget_code = ?", capexTrx.BudgetApprovalCode).
+		First(&budget)
+
 	notification.SendEmail(to, subject, "approval.html", struct {
-		Name    string
-		CapexID string
+		CapexID         string
+		Sender          string
+		BudgetCode      string
+		BudgetAmount    string
+		CapexAmount     string
+		BudgetAvailable string
 	}{
-		Name:    user.Name,
-		CapexID: strconv.Itoa(int(trxID)),
+		CapexID:         strconv.Itoa(int(trxID)),
+		Sender:          user.Name,
+		BudgetCode:      capexTrx.BudgetApprovalCode,
+		BudgetAmount:    humanize.FormatInteger("#.###,", budget.BudgetAmount),
+		CapexAmount:     humanize.FormatInteger("#.###,", int(capexTrx.TotalAmount)),
+		BudgetAvailable: humanize.FormatInteger("#.###,", budget.Remaining),
 	})
+
+	// notification.SendEmail(to, subject, "approval.html", struct {
+	// 	Name    string
+	// 	CapexID string
+	// }{
+	// 	Name:    user.Name,
+	// 	CapexID: strconv.Itoa(int(trxID)),
+	// })
 }
 
 func notifAccounting(trxID uint) {
