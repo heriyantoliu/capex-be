@@ -5,7 +5,10 @@ import (
 	"fmt"
 	"log"
 	"net/smtp"
+	"os"
 	"text/template"
+
+	"github.com/joho/godotenv"
 )
 
 // func SendEmail(to []string, subject string, templateHTML string, bodyVar map[string]string) {
@@ -38,8 +41,10 @@ import (
 // SendEmail ... Function to send email
 func SendEmail(to []string, subject string, templateHTML string, bodyVar interface{}) {
 
-	const mailServerUsername string = "fotocopy@sidomuncul.co.id"
-	const mailServerPassword string = "SidoMuncul2018"
+	_ = godotenv.Load()
+
+	var mailServerUsername string = os.Getenv("SMTPUser")
+	var mailServerPassword string = os.Getenv("SMTPPassword")
 	const sender string = "noreply@sidomuncul.co.id"
 
 	const headers string = "MIME-version: 1.0;\nContent-Type: text/html;"
