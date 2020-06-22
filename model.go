@@ -26,11 +26,14 @@ type CapexTrx struct {
 	StorageLocation    string `json:"storageLocation"`
 	CreatedBy          uint   `json:"createdBy"`
 	NextApproval       uint   `json:"nextApproval"`
-	Status             string `sql:"type:ENUM('A','R', '', 'I')" json:"status"`
+	Status             string `json:"status"`
 	ACCApproved        string `sql:"type:ENUM('X', '')" json:"ACCApproved"`
 	AssetClass         string `json:"assetClass"`
 	AssetActivityType  string `json:"assetActivityType"`
 	AssetGroup         string `json:"assetGroup"`
+	SAPCompanyCode     string `json:"SAPCompanyCode"`
+	SAPAssetNo         string `json:"SAPAssetNo"`
+	SAPAssetSubNo      string `json:"SAPAssetSubNo"`
 }
 
 type UserRule struct {
@@ -42,7 +45,6 @@ type Approval struct {
 	Departement string  `gorm:"primary_key;auto_increment:false"`
 	AssetType   string  `gorm:"primary_key;auto_increment:false"`
 	Unbudgeted  bool    `gorm:"primary_key;auto_increment:false"`
-	IT          bool    `gorm:"primary_key;auto_increment:false"`
 	AmountLow   float64 `gorm:"primary_key"`
 	Seq         uint    `gorm:"primary_key;auto_increment:false"`
 	AmountHigh  float64

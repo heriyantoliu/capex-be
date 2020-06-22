@@ -4,3 +4,4 @@ CAPEX/*
 .env
 *.exe
 .vscode
+dockerVolume

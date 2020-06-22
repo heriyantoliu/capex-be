@@ -8,6 +8,23 @@ services:
       - 3306:3306
     volumes:
       - ./my.cnf:/etc/mysql/my.cnf
+      - ./dockerVolume/mysql:/var/lib/mysql
     environment:
       MYSQL_ROOT_PASSWORD: example
+    restart: always
+  ftp:
+    container_name: vsftpd
+    image: fauria/vsftpd
+    ports:
+      - 0021:0021
+      - 0020:0020
+      - 21100-21110:21100-21110
+    volumes:
+      - ./dockerVolume/ftp:/home/vsftpd
+    environment:
+      FTP_USER: myuser
+      FTP_PASS: mypass
+      PASV_ADDRESS: 127.0.0.1
+      PASV_MIN_PORT: 21100
+      PASV_MAX_PORT: 21110
     restart: always

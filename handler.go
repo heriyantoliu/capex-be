@@ -180,6 +180,9 @@ func getCapexTrx(c *gin.Context) {
 	createdBy := c.Query("created")
 	waitAppr := c.Query("wait_appr")
 	// accAppr := c.Query("acc_appr")
+	replicate, _ := strconv.ParseBool(c.Query("replicate"))
+
+	log.Println("Replicate :", replicate)
 
 	var capexTrxAll []CapexTrx
 	if createdBy != "" {
@@ -192,6 +195,8 @@ func getCapexTrx(c *gin.Context) {
 		} else {
 			err = db.Where("next_approval = ?", waitAppr).Find(&capexTrxAll).Error
 		}
+	} else if replicate {
+		err = db.Where("status in (?)", []string{"A", "SAP", "RI"}).Find(&capexTrxAll).Error
 	} else {
 		err = db.Find(&capexTrxAll).Error
 	}
@@ -377,6 +382,51 @@ func createCapexTrx(c *gin.Context) {
 	return
 }
 
+func updateCapexTrxSAP(c *gin.Context) {
+	capexID := c.Param("id")
+
+	reqBody := struct {
+		SAPCompanyCode string `json:"SAPCompanyCode"`
+		SAPAssetNo     string `json:"SAPAssetNo"`
+		SAPAssetSubNo  string `json:"SAPAssetSubNo"`
+	}{}
+
+	c.BindJSON(&reqBody)
+
+	var capexTrx CapexTrx
+
+	err := db.Where("id = ?", capexID).First(&capexTrx).Error
+	if err != nil || capexTrx.ID == 0 {
+		c.AbortWithError(http.StatusNotFound, errors.New("Capex not found"))
+		c.JSON(http.StatusNotFound, gin.H{
+			"message": "Capex not found",
+		})
+		return
+	}
+
+	capexTrx.SAPCompanyCode = reqBody.SAPCompanyCode
+	capexTrx.SAPAssetNo = reqBody.SAPAssetNo
+	capexTrx.SAPAssetSubNo = reqBody.SAPAssetSubNo
+
+	err = db.Model(&capexTrx).Updates(CapexTrx{
+		SAPCompanyCode: reqBody.SAPCompanyCode,
+		SAPAssetNo:     reqBody.SAPAssetNo,
+		SAPAssetSubNo:  reqBody.SAPAssetSubNo,
+		Status:         "SAP",
+	}).Error
+	if err != nil {
+		c.AbortWithError(http.StatusInternalServerError, err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, capexTrx)
+	return
+
+}
+
 func updateCapexTrx(c *gin.Context) {
 	id, err := validateID(c)
 	if err != nil {
@@ -419,10 +469,13 @@ func updateCapexTrx(c *gin.Context) {
 	}
 
 	var approval []Approval
-	err = db.Where("departement = ? and asset_type = ? and unbudgeted = ? and it = ? and amount_low <= ? and amount_high >= ?", capexTrx.RequestorPosition, capexTrx.AssetClass, unbudgeted, 1, capexTrx.TotalAmount, capexTrx.TotalAmount).
-		Order("seq").
-		Find(&approval).
-		Error
+	err = db.Where("departement = ? and asset_type = ? and unbudgeted = ? and amount_low <= ? and amount_high >= ?",
+		capexTrx.RequestorPosition,
+		capexTrx.AssetClass,
+		unbudgeted,
+		capexTrx.TotalAmount,
+		capexTrx.TotalAmount,
+	).Order("seq").Find(&approval).Error
 	if err != nil || len(approval) <= 0 {
 		c.AbortWithError(http.StatusNotFound, errors.New("Approval not found"))
 		c.JSON(http.StatusNotFound, gin.H{
@@ -439,7 +492,14 @@ func updateCapexTrx(c *gin.Context) {
 	}
 
 	tx := db.Begin()
-	err = tx.Model(&capexTrx).Updates(CapexTrx{AssetClass: resBody.AssetClass, AssetActivityType: resBody.AssetActivityType, AssetGroup: resBody.AssetGroup, ACCApproved: "X", Status: "I", NextApproval: capexTrx.NextApproval}).Error
+	err = tx.Model(&capexTrx).Updates(CapexTrx{
+		AssetClass:        resBody.AssetClass,
+		AssetActivityType: resBody.AssetActivityType,
+		AssetGroup:        resBody.AssetGroup,
+		ACCApproved:       "X",
+		Status:            "I",
+		NextApproval:      capexTrx.NextApproval,
+	}).Error
 	// err = tx.Save(&capexTrx).Error
 	if err != nil {
 		tx.Rollback()
@@ -484,6 +544,49 @@ func updateCapexTrx(c *gin.Context) {
 	go notifApprover(capexTrx.ID, capexTrx.NextApproval, uint(id))
 
 	c.JSON(200, capexTrx)
+	return
+}
+
+func replicateCapex(c *gin.Context) {
+
+	_, err := validateID(c)
+	if err != nil {
+		return
+	}
+
+	ID := c.Param("id")
+
+	var capexTrx CapexTrx
+	err = db.Where("id = ?", ID).First(&capexTrx).Error
+	if err != nil {
+		c.AbortWithError(http.StatusNotFound, errors.New("Invalid Capex ID"))
+		c.JSON(http.StatusNotFound, gin.H{
+			"message": "Invalid Capex ID",
+		})
+		return
+	}
+
+	if capexTrx.Status != "A" {
+		c.AbortWithError(http.StatusBadRequest, errors.New("Capex not fully approved or replicated already"))
+		c.JSON(http.StatusNotFound, gin.H{
+			"message": "Capex not fully approved or replicated already",
+		})
+		return
+	}
+
+	err = exportToCSV(capexTrx)
+	if err != nil {
+		c.AbortWithError(http.StatusInternalServerError, err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": err.Error(),
+		})
+		return
+	}
+
+	capexTrx.Status = "RI"
+	db.Model(&capexTrx).Update("status", "RI")
+
+	c.JSON(http.StatusOK, capexTrx)
 	return
 }
 
@@ -645,7 +748,7 @@ func approveCapex(c *gin.Context) {
 				// return
 			} else {
 				go notifFullApprove(capexTrx.ID)
-				go exportToCSV(capexTrx)
+
 			}
 		}
 	}
@@ -1106,18 +1209,38 @@ func notifFullApprove(trxID uint) {
 
 }
 
-func exportToCSV(trx CapexTrx) {
-	contents := [][]string{}
+func exportToCSV(trx CapexTrx) error {
+	contents := [][]string{
+		{
+			"ID",
+			"Description",
+			"Serial Number",
+			"Quantity",
+			"UoM",
+			"Cost Center",
+			"Activity Type",
+			"Asset Group",
+		},
+	}
 
 	content := []string{
 		strconv.Itoa(int(trx.ID)),
+		trx.Description,
+		trx.SerialNumber,
 		strconv.Itoa(int(trx.Quantity)),
 		trx.Uom,
-		strconv.Itoa(int(trx.TotalAmount)),
-		"IDR",
-		trx.Description,
+		trx.CostCenter,
+		trx.AssetActivityType,
+		trx.AssetGroup,
 	}
 	contents = append(contents, content)
 
-	export.SaveCSV("CAPEX", strconv.Itoa(int(trx.ID)), contents)
+	filename := fmt.Sprintf("%s-%s.csv", strconv.Itoa(int(trx.ID)), time.Now().Format("02012006150405"))
+
+	err := export.SaveCSV(filename, contents)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
