@@ -3,9 +3,9 @@ package export
 import (
 	"bytes"
 	"encoding/csv"
+	"fmt"
 	"log"
 	"os"
-	"time"
 
 	"github.com/jlaffaye/ftp"
 	"github.com/joho/godotenv"
@@ -38,7 +38,7 @@ func SaveCSV(filename string, contents [][]string) error {
 		return err
 	}
 
-	var destinationFile = filename + "-" + time.Now().Format("02012006150405") + ".csv"
+	destinationFile := fmt.Sprintf("%s/%s", os.Getenv("FTPDirectory"), filename)
 	err = conn.Stor(destinationFile, buf)
 	if err != nil {
 		log.Fatal(err.Error())

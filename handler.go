@@ -386,9 +386,9 @@ func updateCapexTrxSAP(c *gin.Context) {
 	capexID := c.Param("id")
 
 	reqBody := struct {
-		SAPCompanyCode string `json:"SAPCompanyCode"`
-		SAPAssetNo     string `json:"SAPAssetNo"`
-		SAPAssetSubNo  string `json:"SAPAssetSubNo"`
+		SAPCompanyCode string `json:"companyCode"`
+		SAPAssetNo     string `json:"assetNo"`
+		SAPAssetSubNo  string `json:"assetSubNo"`
 	}{}
 
 	c.BindJSON(&reqBody)
@@ -1235,7 +1235,7 @@ func exportToCSV(trx CapexTrx) error {
 	}
 	contents = append(contents, content)
 
-	filename := fmt.Sprintf("%s-%s.csv", strconv.Itoa(int(trx.ID)), time.Now().Format("02012006150405"))
+	filename := fmt.Sprintf("%s-%s.csv", strconv.Itoa(int(trx.ID)), time.Now().Format("02012006150405.000"))
 
 	err := export.SaveCSV(filename, contents)
 	if err != nil {

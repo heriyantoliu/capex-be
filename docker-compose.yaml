@@ -11,6 +11,7 @@ services:
       - ./dockerVolume/mysql:/var/lib/mysql
     environment:
       MYSQL_ROOT_PASSWORD: example
+    command: --default-authentication-plugin=mysql_native_password
     restart: always
   ftp:
     container_name: vsftpd
