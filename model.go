@@ -31,9 +31,7 @@ type CapexTrx struct {
 	AssetClass         string `json:"assetClass"`
 	AssetActivityType  string `json:"assetActivityType"`
 	AssetGroup         string `json:"assetGroup"`
-	SAPCompanyCode     string `json:"SAPCompanyCode"`
-	SAPAssetNo         string `json:"SAPAssetNo"`
-	SAPAssetSubNo      string `json:"SAPAssetSubNo"`
+	AssetGenMode       string `json:"assetGenMode"`
 }
 
 type UserRule struct {
@@ -60,6 +58,14 @@ type CapexAppr struct {
 	Remark     string `json:"remark"`
 	CreatedAt  time.Time
 	UpdatedAt  time.Time
+}
+
+type CapexAsset struct {
+	CapexID     uint   `gorm:"primary_key;auto_increment:false" json:"capexId"`
+	CompanyCode string `gorm:"primary_key;auto_increment:false" json:"companyCode"`
+	AssetNo     string `gorm:"primary_key;auto_increment:false" json:"assetNo"`
+	AssetSubNo  string `gorm:"primary_key;auto_increment:false" json:"assetSubNo"`
+	CreatedAt   time.Time
 }
 
 type Plant struct {

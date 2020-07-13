@@ -74,7 +74,6 @@ func catch() {
 func main() {
 
 	defer catch()
-	defer os.Exit(1)
 
 	r := gin.Default()
 	r.Use(cors.New(cors.Config{
@@ -90,13 +89,14 @@ func main() {
 		})
 		return
 	})
-	r.PUT("/capexTrx/:id/SAP", updateCapexTrxSAP)
+	r.POST("/capexAsset", createCapexAsset)
 	r.Use(middleware)
 	r.GET("/capexTrx", getCapexTrx)
 	r.POST("/capexTrx", createCapexTrx)
 	r.GET("/capexTrx/:id", getCapexTrxDetail)
 	r.PUT("/capexTrx/:id", updateCapexTrx)
 	r.POST("/capexTrx/:id/replicate", replicateCapex)
+	r.GET("/capexAsset/:id", getCapexAsset)
 	r.POST("/approve", approveCapex)
 	r.GET("/rules", getRules)
 	r.GET("/createInfo", getCreateInfo)

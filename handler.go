@@ -33,7 +33,7 @@ func initDb() {
 	// defer db.Close()
 
 	db.SingularTable(true)
-	db.AutoMigrate(&CapexTrx{}, &Plant{}, &Approval{}, &CapexAppr{}, &UserRule{}, &User{})
+	db.AutoMigrate(&CapexTrx{}, &Plant{}, &Approval{}, &CapexAppr{}, &UserRule{}, &User{}, &CapexAsset{})
 }
 
 func getCreateInfo(c *gin.Context) {
@@ -346,7 +346,6 @@ func createCapexTrx(c *gin.Context) {
 	tx := db.Begin()
 	err = tx.Create(&capexTrx).Error
 	if err != nil {
-		log.Println("")
 		tx.Rollback()
 		c.AbortWithError(http.StatusInternalServerError, err)
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -382,20 +381,14 @@ func createCapexTrx(c *gin.Context) {
 	return
 }
 
-func updateCapexTrxSAP(c *gin.Context) {
-	capexID := c.Param("id")
+func createCapexAsset(c *gin.Context) {
 
-	reqBody := struct {
-		SAPCompanyCode string `json:"companyCode"`
-		SAPAssetNo     string `json:"assetNo"`
-		SAPAssetSubNo  string `json:"assetSubNo"`
-	}{}
-
-	c.BindJSON(&reqBody)
+	var capexAsset CapexAsset
+	c.BindJSON(&capexAsset)
 
 	var capexTrx CapexTrx
 
-	err := db.Where("id = ?", capexID).First(&capexTrx).Error
+	err := db.Where("id = ?", capexAsset.CapexID).First(&capexTrx).Error
 	if err != nil || capexTrx.ID == 0 {
 		c.AbortWithError(http.StatusNotFound, errors.New("Capex not found"))
 		c.JSON(http.StatusNotFound, gin.H{
@@ -404,16 +397,28 @@ func updateCapexTrxSAP(c *gin.Context) {
 		return
 	}
 
-	capexTrx.SAPCompanyCode = reqBody.SAPCompanyCode
-	capexTrx.SAPAssetNo = reqBody.SAPAssetNo
-	capexTrx.SAPAssetSubNo = reqBody.SAPAssetSubNo
+	tx := db.Begin()
+	err = tx.Create(&capexAsset).Error
+	if err != nil {
+		tx.Rollback()
+		c.AbortWithError(http.StatusInternalServerError, err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": err.Error(),
+		})
+		return
+	}
 
-	err = db.Model(&capexTrx).Updates(CapexTrx{
-		SAPCompanyCode: reqBody.SAPCompanyCode,
-		SAPAssetNo:     reqBody.SAPAssetNo,
-		SAPAssetSubNo:  reqBody.SAPAssetSubNo,
-		Status:         "SAP",
-	}).Error
+	err = tx.Model(&capexTrx).Update("Status", "SAP").Error
+	if err != nil {
+		tx.Rollback()
+		c.AbortWithError(http.StatusInternalServerError, err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": err.Error(),
+		})
+		return
+	}
+
+	err = tx.Commit().Error
 	if err != nil {
 		c.AbortWithError(http.StatusInternalServerError, err)
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -423,6 +428,30 @@ func updateCapexTrxSAP(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, capexTrx)
+	return
+
+}
+
+func getCapexAsset(c *gin.Context) {
+	_, err := validateID(c)
+	if err != nil {
+		return
+	}
+
+	capexID := c.Param("id")
+
+	var capexAsset []CapexAsset
+
+	err = db.Where("capex_id = ?", capexID).Find(&capexAsset).Error
+	if err != nil {
+		c.AbortWithError(http.StatusNotFound, errors.New("Asset not found"))
+		c.JSON(http.StatusNotFound, gin.H{
+			"message": "Asset not found",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, capexAsset)
 	return
 
 }
@@ -438,7 +467,6 @@ func updateCapexTrx(c *gin.Context) {
 	var resBody, capexTrx CapexTrx
 	c.BindJSON(&resBody)
 	if resBody.AssetClass == "" {
-		log.Println("ERROR BINDING")
 		c.AbortWithError(http.StatusNotFound, errors.New("Asset Class must be filled"))
 		c.JSON(http.StatusNotFound, gin.H{
 			"message": "Asset Class must be filled",
@@ -458,6 +486,7 @@ func updateCapexTrx(c *gin.Context) {
 	capexTrx.AssetClass = resBody.AssetClass
 	capexTrx.AssetActivityType = resBody.AssetActivityType
 	capexTrx.AssetGroup = resBody.AssetGroup
+	capexTrx.AssetGenMode = resBody.AssetGenMode
 	capexTrx.ACCApproved = "X"
 	capexTrx.Status = "I"
 
@@ -496,6 +525,7 @@ func updateCapexTrx(c *gin.Context) {
 		AssetClass:        resBody.AssetClass,
 		AssetActivityType: resBody.AssetActivityType,
 		AssetGroup:        resBody.AssetGroup,
+		AssetGenMode:      resBody.AssetGenMode,
 		ACCApproved:       "X",
 		Status:            "I",
 		NextApproval:      capexTrx.NextApproval,
@@ -1220,6 +1250,7 @@ func exportToCSV(trx CapexTrx) error {
 			"Cost Center",
 			"Activity Type",
 			"Asset Group",
+			"Asset Generation Mode",
 		},
 	}
 
@@ -1232,6 +1263,7 @@ func exportToCSV(trx CapexTrx) error {
 		trx.CostCenter,
 		trx.AssetActivityType,
 		trx.AssetGroup,
+		trx.AssetGenMode,
 	}
 	contents = append(contents, content)
 
