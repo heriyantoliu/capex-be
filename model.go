@@ -40,24 +40,23 @@ type UserRule struct {
 }
 
 type Approval struct {
-	Departement string  `gorm:"primary_key;auto_increment:false"`
-	AssetType   string  `gorm:"primary_key;auto_increment:false"`
-	Unbudgeted  bool    `gorm:"primary_key;auto_increment:false"`
-	AmountLow   float64 `gorm:"primary_key"`
-	Seq         uint    `gorm:"primary_key;auto_increment:false"`
-	AmountHigh  float64
-	Approver    uint
+	CostCenter string  `gorm:"primary_key;auto_increment:false"`
+	AssetType  string  `gorm:"primary_key;auto_increment:false"`
+	Unbudgeted bool    `gorm:"primary_key;auto_increment:false"`
+	AmountLow  float64 `gorm:"primary_key"`
+	Seq        uint    `gorm:"primary_key;auto_increment:false"`
+	AmountHigh float64
+	Approver   uint
 }
 
 type CapexAppr struct {
-	CapexID    uint   `gorm:"primary_key;auto_increment:false" json:"capexID"`
-	Seq        uint   `gorm:"primary_key;auto_increment:false" json:"seq"`
-	Approver   uint   `json:"approver"`
-	Accounting string `sql:"type:ENUM('X', '')" json:"Accounting"`
-	Status     string `json:"status"`
-	Remark     string `json:"remark"`
-	CreatedAt  time.Time
-	UpdatedAt  time.Time
+	CapexID   uint   `gorm:"primary_key;auto_increment:false" json:"capexID"`
+	Seq       uint   `gorm:"primary_key;auto_increment:false" json:"seq"`
+	Approver  uint   `json:"approver"`
+	Status    string `json:"status"`
+	Remark    string `json:"remark"`
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 type CapexAsset struct {

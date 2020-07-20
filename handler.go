@@ -182,8 +182,6 @@ func getCapexTrx(c *gin.Context) {
 	// accAppr := c.Query("acc_appr")
 	replicate, _ := strconv.ParseBool(c.Query("replicate"))
 
-	log.Println("Replicate :", replicate)
-
 	var capexTrxAll []CapexTrx
 	if createdBy != "" {
 		err = db.Where("created_by = ?", createdBy).Find(&capexTrxAll).Error
@@ -498,8 +496,8 @@ func updateCapexTrx(c *gin.Context) {
 	}
 
 	var approval []Approval
-	err = db.Where("departement = ? and asset_type = ? and unbudgeted = ? and amount_low <= ? and amount_high >= ?",
-		capexTrx.RequestorPosition,
+	err = db.Debug().Where("cost_center = ? and asset_type = ? and unbudgeted = ? and amount_low <= ? and amount_high >= ?",
+		capexTrx.CostCenter,
 		capexTrx.AssetClass,
 		unbudgeted,
 		capexTrx.TotalAmount,
