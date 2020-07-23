@@ -3,11 +3,12 @@ package main
 import (
 	"capex/export"
 	"capex/notification"
+	"encoding/base64"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
@@ -149,9 +150,6 @@ func getRules(c *gin.Context) {
 	if err != nil {
 		return
 	}
-
-	cookie, err := c.Cookie("testCookie")
-	log.Println("Cookie:", cookie)
 
 	var userRules []UserRule
 	err = db.Where("user_id = ?", id).Find(&userRules).Error
@@ -1050,15 +1048,29 @@ func createUser(c *gin.Context) {
 
 func login(c *gin.Context) {
 
-	loginBody := struct {
-		Username string `json:"username"`
-		Password string `json:"password"`
-	}{}
+	auth := strings.SplitN(c.Request.Header.Get("Authorization"), " ", 2)
+	if auth[0] != "Basic" {
+		c.AbortWithError(http.StatusUnauthorized, errors.New("Unauthorized"))
+		c.JSON(http.StatusNotFound, gin.H{
+			"message": "Unauthorized",
+		})
+	}
 
-	c.BindJSON(&loginBody)
+	payload, _ := base64.StdEncoding.DecodeString(auth[1])
+	pair := strings.SplitN(string(payload), ":", 2)
+
+	var username = pair[0]
+	var password = pair[1]
+
+	// loginBody := struct {
+	// 	Username string `json:"username"`
+	// 	Password string `json:"password"`
+	// }{}
+
+	// c.BindJSON(&loginBody)
 
 	var user User
-	if err := db.Where("username = ?", loginBody.Username).First(&user).Error; err != nil {
+	if err := db.Where("username = ?", username).First(&user).Error; err != nil {
 		c.AbortWithError(http.StatusNotFound, errors.New("Username not found"))
 		c.JSON(http.StatusNotFound, gin.H{
 			"message": "Username not found",
@@ -1066,7 +1078,7 @@ func login(c *gin.Context) {
 		return
 	}
 
-	err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(loginBody.Password))
+	err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password))
 	if err != nil {
 		c.AbortWithError(http.StatusNotFound, errors.New("Username or password mismatch"))
 		c.JSON(http.StatusNotFound, gin.H{
