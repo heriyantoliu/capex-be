@@ -24,8 +24,8 @@ type CapexTrx struct {
 	TotalBudget        uint64 `json:"totalBudget"`
 	Plant              string `json:"plant"`
 	StorageLocation    string `json:"storageLocation"`
-	CreatedBy          uint   `json:"createdBy"`
-	NextApproval       uint   `json:"nextApproval"`
+	CreatedBy          string `json:"createdBy"`
+	NextApproval       string `json:"nextApproval"`
 	Status             string `json:"status"`
 	ACCApproved        string `sql:"type:ENUM('X', '')" json:"ACCApproved"`
 	AssetClass         string `json:"assetClass"`
@@ -34,25 +34,24 @@ type CapexTrx struct {
 	AssetGenMode       string `json:"assetGenMode"`
 }
 
-type UserRule struct {
-	UserID uint   `gorm:"primary_key;auto_increment:false" json:"userID"`
-	Rule   string `gorm:"primary_key;type:ENUM('CREATOR','VIEWER','APPROVER','ACCAPPROVER')" json:"rule"`
+type UserRole struct {
+	Username string `gorm:"primary_key;auto_increment:false" json:"username"`
+	Role     string `gorm:"primary_key;type:ENUM('CREATOR','VIEWER','APPROVER','ACCAPPROVER')" json:"role"`
 }
 
 type Approval struct {
 	CostCenter string  `gorm:"primary_key;auto_increment:false"`
-	AssetType  string  `gorm:"primary_key;auto_increment:false"`
-	Unbudgeted bool    `gorm:"primary_key;auto_increment:false"`
+	AssetClass string  `gorm:"primary_key;auto_increment:false"`
 	AmountLow  float64 `gorm:"primary_key"`
 	Seq        uint    `gorm:"primary_key;auto_increment:false"`
 	AmountHigh float64
-	Approver   uint
+	Approver   string
 }
 
 type CapexAppr struct {
 	CapexID   uint   `gorm:"primary_key;auto_increment:false" json:"capexID"`
 	Seq       uint   `gorm:"primary_key;auto_increment:false" json:"seq"`
-	Approver  uint   `json:"approver"`
+	Approver  string `json:"approver"`
 	Status    string `json:"status"`
 	Remark    string `json:"remark"`
 	CreatedAt time.Time

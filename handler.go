@@ -34,7 +34,7 @@ func initDb() {
 	// defer db.Close()
 
 	db.SingularTable(true)
-	db.AutoMigrate(&CapexTrx{}, &Plant{}, &Approval{}, &CapexAppr{}, &UserRule{}, &User{}, &CapexAsset{})
+	db.AutoMigrate(&CapexTrx{}, &Plant{}, &Approval{}, &CapexAppr{}, &UserRole{}, &User{}, &CapexAsset{})
 }
 
 func getCreateInfo(c *gin.Context) {
@@ -145,30 +145,37 @@ func getCreateInfo(c *gin.Context) {
 	c.JSON(200, infoBody)
 }
 
-func getRules(c *gin.Context) {
-	id, err := validateID(c)
+func getRoles(c *gin.Context) {
+	usernameToken, err := validateUsername(c)
 	if err != nil {
 		return
 	}
 
-	var userRules []UserRule
-	err = db.Where("user_id = ?", id).Find(&userRules).Error
-	if err != nil || len(userRules) <= 0 {
+	username := c.Param("id")
+
+	if username != usernameToken {
 		c.AbortWithStatus(404)
 		return
 	}
 
-	ruleBody := struct {
-		UserID uint     `json:"userID"`
-		Rule   []string `json:"rule"`
-	}{}
-
-	ruleBody.UserID = uint(id)
-	for _, rule := range userRules {
-		ruleBody.Rule = append(ruleBody.Rule, rule.Rule)
+	var userRoles []UserRole
+	err = db.Where("username = ?", username).Find(&userRoles).Error
+	if err != nil || len(userRoles) <= 0 {
+		c.AbortWithStatus(404)
+		return
 	}
 
-	c.JSON(200, ruleBody)
+	roleBody := struct {
+		Username string   `json:"username"`
+		Role     []string `json:"role"`
+	}{}
+
+	roleBody.Username = username
+	for _, role := range userRoles {
+		roleBody.Role = append(roleBody.Role, role.Role)
+	}
+
+	c.JSON(200, roleBody)
 	return
 }
 
@@ -177,16 +184,15 @@ func getCapexTrx(c *gin.Context) {
 
 	createdBy := c.Query("created")
 	waitAppr := c.Query("wait_appr")
-	// accAppr := c.Query("acc_appr")
 	replicate, _ := strconv.ParseBool(c.Query("replicate"))
 
 	var capexTrxAll []CapexTrx
 	if createdBy != "" {
 		err = db.Where("created_by = ?", createdBy).Find(&capexTrxAll).Error
 	} else if waitAppr != "" {
-		var userRules UserRule
-		err = db.Where("user_id = ? AND rule = 'ACCAPPROVER'", waitAppr).First(&userRules).Error
-		if userRules.Rule == "ACCAPPROVER" {
+		var userRoles UserRole
+		err = db.Where("username = ? AND role = 'ACCAPPROVER'", waitAppr).First(&userRoles).Error
+		if userRoles.Role == "ACCAPPROVER" {
 			err = db.Where("acc_approved = ''").Find(&capexTrxAll).Error
 		} else {
 			err = db.Where("next_approval = ?", waitAppr).Find(&capexTrxAll).Error
@@ -212,8 +218,7 @@ func getCapexTrxDetail(c *gin.Context) {
 
 	type capexApprover struct {
 		Seq       uint
-		Approver  uint
-		Name      string
+		Approver  string
 		Status    string
 		Remark    string
 		CreatedAt time.Time
@@ -221,7 +226,7 @@ func getCapexTrxDetail(c *gin.Context) {
 	}
 
 	type requestor struct {
-		Id        uint
+		Username  string
 		Name      string
 		Position  string
 		PayrollID string
@@ -247,15 +252,14 @@ func getCapexTrxDetail(c *gin.Context) {
 	// var capexAppr []CapexAppr
 	// err = db.Where("capex_id = ?", ID).Find(&capexBody.Approver).Error
 	err = db.Table("capex_appr as c").
-		Select("c.seq, c.approver, u.name, c.status, c.remark, c.created_at, c.updated_at").
-		Joins("JOIN user as u on c.approver = u.id").
+		Select("c.seq, c.approver, c.status, c.remark, c.created_at, c.updated_at").
 		Where("c.capex_id = ?", ID).
 		Find(&capexBody.Approver).
 		Error
 
 	err = db.Table("user").
-		Select("id, name, position, payroll_id").
-		Where("id = ?", capexBody.CapexDetail.CreatedBy).
+		Select("username, name, position, payroll_id").
+		Where("username = ?", capexBody.CapexDetail.CreatedBy).
 		First(&capexBody.Requestor).
 		Error
 
@@ -269,27 +273,27 @@ func getCapexTrxDetail(c *gin.Context) {
 	return
 }
 
-func validateID(c *gin.Context) (id float64, err error) {
-	id = c.MustGet("ID").(float64)
-	if id == 0 {
-		c.AbortWithError(http.StatusNotFound, errors.New("User unknown"))
+func validateUsername(c *gin.Context) (username string, err error) {
+	username = c.MustGet("USERNAME").(string)
+	if username == "" {
+		c.AbortWithError(http.StatusNotFound, errors.New("Username unknown"))
 		c.JSON(http.StatusNotFound, gin.H{
-			"message": "User unknown",
+			"message": "Username unknown",
 		})
-		return 0, errors.New("User unknown")
+		return "", errors.New("Username unknown")
 	}
-	return id, nil
+	return username, nil
 }
 
 func createCapexTrx(c *gin.Context) {
 
 	var err error
 
-	id := c.MustGet("ID").(float64)
-	if id == 0 {
-		c.AbortWithError(http.StatusNotFound, errors.New("User unknown"))
+	username := c.MustGet("USERNAME").(string)
+	if username == "" {
+		c.AbortWithError(http.StatusNotFound, errors.New("Username unknown"))
 		c.JSON(http.StatusNotFound, gin.H{
-			"message": "User unknown",
+			"message": "Username unknown",
 		})
 		return
 	}
@@ -304,11 +308,11 @@ func createCapexTrx(c *gin.Context) {
 		return
 	}
 
-	capexTrx.CreatedBy = uint(id)
+	capexTrx.CreatedBy = username
 
 	var user User
 
-	_ = db.Where("ID = ?", id).First(&user).Error
+	_ = db.Where("username = ?", username).First(&user).Error
 
 	capexTrx.RequestorPosition = user.Position
 
@@ -382,9 +386,11 @@ func createCapexAsset(c *gin.Context) {
 	var capexAsset CapexAsset
 	c.BindJSON(&capexAsset)
 
+	capexID := c.Param("id")
+
 	var capexTrx CapexTrx
 
-	err := db.Where("id = ?", capexAsset.CapexID).First(&capexTrx).Error
+	err := db.Where("id = ?", capexID).First(&capexTrx).Error
 	if err != nil || capexTrx.ID == 0 {
 		c.AbortWithError(http.StatusNotFound, errors.New("Capex not found"))
 		c.JSON(http.StatusNotFound, gin.H{
@@ -429,7 +435,7 @@ func createCapexAsset(c *gin.Context) {
 }
 
 func getCapexAsset(c *gin.Context) {
-	_, err := validateID(c)
+	_, err := validateUsername(c)
 	if err != nil {
 		return
 	}
@@ -453,7 +459,7 @@ func getCapexAsset(c *gin.Context) {
 }
 
 func updateCapexTrx(c *gin.Context) {
-	id, err := validateID(c)
+	username, err := validateUsername(c)
 	if err != nil {
 		return
 	}
@@ -486,18 +492,10 @@ func updateCapexTrx(c *gin.Context) {
 	capexTrx.ACCApproved = "X"
 	capexTrx.Status = "I"
 
-	var unbudgeted bool = false
-	if capexTrx.BudgetType == "U" {
-		unbudgeted = false
-	} else {
-		unbudgeted = true
-	}
-
 	var approval []Approval
-	err = db.Debug().Where("cost_center = ? and asset_type = ? and unbudgeted = ? and amount_low <= ? and amount_high >= ?",
+	err = db.Where("cost_center = ? and asset_class = ? and amount_low <= ? and amount_high >= ?",
 		capexTrx.CostCenter,
 		capexTrx.AssetClass,
-		unbudgeted,
 		capexTrx.TotalAmount,
 		capexTrx.TotalAmount,
 	).Order("seq").Find(&approval).Error
@@ -567,7 +565,7 @@ func updateCapexTrx(c *gin.Context) {
 		return
 	}
 
-	go notifApprover(capexTrx.ID, capexTrx.NextApproval, uint(id))
+	go notifApprover(capexTrx.ID, capexTrx.NextApproval, username)
 
 	c.JSON(200, capexTrx)
 	return
@@ -575,7 +573,7 @@ func updateCapexTrx(c *gin.Context) {
 
 func replicateCapex(c *gin.Context) {
 
-	_, err := validateID(c)
+	_, err := validateUsername(c)
 	if err != nil {
 		return
 	}
@@ -618,24 +616,30 @@ func replicateCapex(c *gin.Context) {
 
 func approveCapex(c *gin.Context) {
 
-	id := c.MustGet("ID").(float64)
-	if id == 0 {
-		c.AbortWithError(http.StatusNotFound, errors.New("User unknown"))
+	username, err := validateUsername(c)
+	if err != nil {
+		return
+	}
+
+	capexID := c.Param("id")
+
+	// approveBody := struct {
+	// 	CapexID uint `json:"capexID"`
+	// 	Seq     uint `json:"seq"`
+	// }{}
+
+	// c.BindJSON(&approveBody)
+
+	if capexID != "1" {
+		c.AbortWithError(http.StatusNotFound, errors.New("Capex ID not valid"))
 		c.JSON(http.StatusNotFound, gin.H{
-			"message": "User unknown",
+			"message": "Capex ID not valid",
 		})
 		return
 	}
 
-	approveBody := struct {
-		CapexID uint `json:"capexID"`
-		Seq     uint `json:"seq"`
-	}{}
-
-	c.BindJSON(&approveBody)
-
 	var capexTrx CapexTrx
-	err := db.Where("id = ?", approveBody.CapexID).First(&capexTrx).Error
+	err = db.Where("id = ?", capexID).First(&capexTrx).Error
 	if err != nil || capexTrx.ID == 0 {
 		c.AbortWithError(http.StatusNotFound, errors.New("Capex ID not valid"))
 		c.JSON(http.StatusNotFound, gin.H{
@@ -644,7 +648,7 @@ func approveCapex(c *gin.Context) {
 		return
 	}
 
-	if capexTrx.NextApproval != uint(id) {
+	if capexTrx.NextApproval != username {
 		c.AbortWithError(http.StatusNotFound, errors.New("Invalid approver"))
 		c.JSON(http.StatusNotFound, gin.H{
 			"message": "Invalid approver",
@@ -668,7 +672,7 @@ func approveCapex(c *gin.Context) {
 	}
 
 	var capexAppr []CapexAppr
-	err = db.Where("capex_id = ?", approveBody.CapexID).Order("seq").Find(&capexAppr).Error
+	err = db.Where("capex_id = ?", capexID).Order("seq").Find(&capexAppr).Error
 	if err != nil || len(capexAppr) <= 0 {
 		c.AbortWithError(http.StatusNotFound, errors.New("Approval Workflow not found"))
 		c.JSON(http.StatusNotFound, gin.H{
@@ -681,7 +685,7 @@ func approveCapex(c *gin.Context) {
 	var idx int
 	for i, approver := range capexAppr {
 		if approver.Status == "" {
-			if approver.Approver != uint(id) {
+			if approver.Approver != username {
 				c.AbortWithError(http.StatusNotFound, errors.New("Not authorized to approve"))
 				c.JSON(http.StatusNotFound, gin.H{
 					"message": "Not authorized to approve",
@@ -692,7 +696,7 @@ func approveCapex(c *gin.Context) {
 			appr = approver
 			break
 		} else {
-			if approver.Seq == approveBody.Seq && approver.Status != "" {
+			if approver.Approver == username {
 				c.AbortWithError(http.StatusNotFound, errors.New("Approval has been processed"))
 				c.JSON(http.StatusNotFound, gin.H{
 					"message": "Approval has been processed",
@@ -754,7 +758,7 @@ func approveCapex(c *gin.Context) {
 					// })
 					// return
 				} else {
-					go notifApprover(capexTrx.ID, appr.Approver, uint(id))
+					go notifApprover(capexTrx.ID, appr.Approver, username)
 				}
 				break
 			}
@@ -804,25 +808,21 @@ func approveCapex(c *gin.Context) {
 }
 
 func rejectCapex(c *gin.Context) {
-	id := c.MustGet("ID").(float64)
-	if id == 0 {
-		c.AbortWithError(http.StatusNotFound, errors.New("User unknown"))
-		c.JSON(http.StatusNotFound, gin.H{
-			"message": "User unknown",
-		})
+	username, err := validateUsername(c)
+	if err != nil {
 		return
 	}
 
+	capexID := c.Param("id")
+
 	rejectBody := struct {
-		CapexID uint   `json:"capexID"`
-		Seq     uint   `json:"seq"`
-		Remark  string `json:"remark"`
+		Remark string `json:"remark"`
 	}{}
 
 	c.BindJSON(&rejectBody)
 
 	var capexTrx CapexTrx
-	err := db.Where("id = ?", rejectBody.CapexID).First(&capexTrx).Error
+	err = db.Where("id = ?", capexID).First(&capexTrx).Error
 	if err != nil || capexTrx.ID == 0 {
 		c.AbortWithError(http.StatusNotFound, errors.New("Capex ID not valid"))
 		c.JSON(http.StatusNotFound, gin.H{
@@ -831,7 +831,7 @@ func rejectCapex(c *gin.Context) {
 		return
 	}
 
-	if capexTrx.NextApproval != uint(id) {
+	if capexTrx.NextApproval != username {
 		c.AbortWithError(http.StatusNotFound, errors.New("Invalid approver"))
 		c.JSON(http.StatusNotFound, gin.H{
 			"message": "Invalid approver",
@@ -840,7 +840,7 @@ func rejectCapex(c *gin.Context) {
 	}
 
 	var capexAppr []CapexAppr
-	err = db.Where("capex_id = ?", rejectBody.CapexID).Order("seq").Find(&capexAppr).Error
+	err = db.Where("capex_id = ?", capexID).Order("seq").Find(&capexAppr).Error
 	if err != nil || len(capexAppr) <= 0 {
 		c.AbortWithError(http.StatusNotFound, errors.New("Approval Workflow not found"))
 		c.JSON(http.StatusNotFound, gin.H{
@@ -853,10 +853,10 @@ func rejectCapex(c *gin.Context) {
 	// var idx int
 	for _, approver := range capexAppr {
 		if approver.Status == "" {
-			if approver.Approver != uint(id) {
-				c.AbortWithError(http.StatusNotFound, errors.New("Not authorized to approve"))
+			if approver.Approver != username {
+				c.AbortWithError(http.StatusNotFound, errors.New("Not authorized to reject"))
 				c.JSON(http.StatusNotFound, gin.H{
-					"message": "Not authorized to approve",
+					"message": "Not authorized to reject",
 				})
 				return
 			}
@@ -864,7 +864,7 @@ func rejectCapex(c *gin.Context) {
 			appr = approver
 			break
 		} else {
-			if approver.Seq == rejectBody.Seq && approver.Status != "" {
+			if approver.Approver == username {
 				c.AbortWithError(http.StatusNotFound, errors.New("Approval has been processed"))
 				c.JSON(http.StatusNotFound, gin.H{
 					"message": "Approval has been processed",
@@ -1124,11 +1124,11 @@ func login(c *gin.Context) {
 	return
 }
 
-func notifApprover(trxID uint, approverID uint, sender uint) {
+func notifApprover(trxID uint, approver string, sender string) {
 	to := []string{}
 	subject := "Capex " + strconv.Itoa(int(trxID))
 	var user User
-	_ = db.Where("ID = ?", approverID).First(&user).Error
+	_ = db.Where("username = ?", approver).First(&user).Error
 	if user.ID == 0 {
 		return
 	}
@@ -1137,7 +1137,7 @@ func notifApprover(trxID uint, approverID uint, sender uint) {
 	to = append(to, user.Email)
 
 	user = User{}
-	_ = db.Where("ID = ?", sender).First(&user).Error
+	_ = db.Where("username = ?", sender).First(&user).Error
 
 	var capexTrx CapexTrx
 	_ = db.Where("ID = ?", trxID).First(&capexTrx).Error
@@ -1168,13 +1168,6 @@ func notifApprover(trxID uint, approverID uint, sender uint) {
 		BudgetAvailable: humanize.FormatInteger("#.###,", budget.Remaining),
 	})
 
-	// notification.SendEmail(to, subject, "approval.html", struct {
-	// 	Name    string
-	// 	CapexID string
-	// }{
-	// 	Name:    user.Name,
-	// 	CapexID: strconv.Itoa(int(trxID)),
-	// })
 }
 
 func notifAccounting(trxID uint) {
@@ -1205,7 +1198,7 @@ func notifReject(trxID uint, message string) {
 		Email string
 		Name  string
 	}{}
-	_ = db.Debug().Table("capex_trx as c").
+	_ = db.Table("capex_trx as c").
 		Select("u.email, u.name").
 		Joins("JOIN user as u on c.created_by = u.id").
 		Where("c.id = ?", trxID).
@@ -1229,9 +1222,9 @@ func notifFullApprove(trxID uint) {
 		Email string
 		Name  string
 	}{}
-	_ = db.Debug().Table("capex_trx as c").
+	_ = db.Table("capex_trx as c").
 		Select("u.email, u.name").
-		Joins("JOIN user as u on c.created_by = u.id").
+		Joins("JOIN user as u on c.created_by = u.username").
 		Where("c.id = ?", trxID).
 		Find(&user).
 		Error

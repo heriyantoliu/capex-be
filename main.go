@@ -89,22 +89,24 @@ func main() {
 		})
 		return
 	})
-	r.POST("/capexAsset", createCapexAsset)
+	r.POST("/capexTrx/:id/asset", createCapexAsset)
+	r.POST("/login", login)
+	r.POST("/user", createUser)
+
 	r.Use(middleware)
+
 	r.GET("/capexTrx", getCapexTrx)
 	r.POST("/capexTrx", createCapexTrx)
 	r.GET("/capexTrx/:id", getCapexTrxDetail)
 	r.PUT("/capexTrx/:id", updateCapexTrx)
 	r.POST("/capexTrx/:id/replicate", replicateCapex)
-	r.GET("/capexAsset/:id", getCapexAsset)
-	r.POST("/approve", approveCapex)
-	r.GET("/rules", getRules)
-	r.GET("/createInfo", getCreateInfo)
-	r.POST("/reject", rejectCapex)
+	r.GET("/capexTrx/:id/asset", getCapexAsset)
+	r.PATCH("/capexTrx/:id/approve", approveCapex)
+	r.PATCH("/capexTrx/:id/reject", rejectCapex)
+	r.GET("/user/:id/roles", getRoles)
 	r.GET("/user/:id", getUser)
 	r.PUT("/user/:id", updateUser)
-	r.POST("/user", createUser)
-	r.POST("/login", login)
+	r.GET("/createInfo", getCreateInfo)
 
 	r.Run(":" + portApp)
 }
@@ -148,7 +150,7 @@ func middleware(c *gin.Context) {
 		})
 	}
 
-	c.Set("ID", claims["id"])
+	c.Set("USERNAME", claims["username"])
 
 	c.Next()
 }
