@@ -193,7 +193,7 @@ func getCapexTrx(c *gin.Context) {
 		var userRoles UserRole
 		err = db.Where("username = ? AND role = 'ACCAPPROVER'", waitAppr).First(&userRoles).Error
 		if userRoles.Role == "ACCAPPROVER" {
-			err = db.Where("acc_approved = ''").Find(&capexTrxAll).Error
+			err = db.Where("acc_approved = ''").Or("next_approval = ?", waitAppr).Find(&capexTrxAll).Error
 		} else {
 			err = db.Where("next_approval = ?", waitAppr).Find(&capexTrxAll).Error
 		}
@@ -472,6 +472,14 @@ func updateCapexTrx(c *gin.Context) {
 		c.AbortWithError(http.StatusNotFound, errors.New("Asset Class must be filled"))
 		c.JSON(http.StatusNotFound, gin.H{
 			"message": "Asset Class must be filled",
+		})
+		return
+	}
+
+	if resBody.AssetGenMode == "" {
+		c.AbortWithError(http.StatusNotFound, errors.New("Asset generation mode must be filled"))
+		c.JSON(http.StatusNotFound, gin.H{
+			"message": "Asset generation mode must be filled",
 		})
 		return
 	}
