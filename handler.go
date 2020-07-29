@@ -399,6 +399,10 @@ func createCapexAsset(c *gin.Context) {
 		return
 	}
 
+	capexIDUint, _ := strconv.ParseUint(capexID, 10, 0)
+
+	capexAsset.CapexID = uint(capexIDUint)
+
 	tx := db.Begin()
 	err = tx.Create(&capexAsset).Error
 	if err != nil {
