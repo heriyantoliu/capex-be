@@ -83,6 +83,11 @@ func getCreateInfo(c *gin.Context) {
 		DescAstgroup string `json:"assetGrpDesc"`
 	}
 
+	type uom struct {
+		Uom  string `json:"uom"`
+		Desc string `json:"desc"`
+	}
+
 	infoBody := struct {
 		BudgetInfo     []budget     `json:"budgetInfo"`
 		PurposeInfo    []purpose    `json:"purposeInfo"`
@@ -92,6 +97,7 @@ func getCreateInfo(c *gin.Context) {
 		AssetClassInfo []assetClass `json:"assetClassInfo"`
 		ActTypeInfo    []actType    `json:"actTypeInfo"`
 		AssetGrpInfo   []assetGroup `json:"assetGrpInfo"`
+		UomInfo        []uom        `json:"uomInfo"`
 	}{}
 
 	err := db.Table("tb_budget").Find(&infoBody.BudgetInfo).Error
@@ -137,6 +143,12 @@ func getCreateInfo(c *gin.Context) {
 	}
 
 	err = db.Table("tb_astgroup").Find(&infoBody.AssetGrpInfo).Error
+	if err != nil {
+		c.AbortWithStatus(404)
+		return
+	}
+
+	err = db.Table("tb_uom").Find(&infoBody.UomInfo).Error
 	if err != nil {
 		c.AbortWithStatus(404)
 		return
