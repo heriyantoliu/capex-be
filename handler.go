@@ -267,7 +267,7 @@ func getCapexTrxDetail(c *gin.Context) {
 	// err = db.Where("capex_id = ?", ID).Find(&capexBody.Approver).Error
 	err = db.Table("capex_appr as c").
 		Select("c.seq, c.approver, c.status, c.remark, c.created_at, c.updated_at, u.name").Joins("JOIN user as u on c.approver = u.username").
-		Where("c.capex_id = ?", ID).
+		Where("c.capex_id = ?", ID).Order("seq").
 		Find(&capexBody.Approver).
 		Error
 
