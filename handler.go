@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -1173,6 +1174,7 @@ func notifApprover(trxID uint, approver string, sender string) {
 		CapexAmount     string
 		BudgetAvailable string
 		BudgetDesc      string
+		Domain          string
 	}{
 		CapexID:         strconv.Itoa(int(trxID)),
 		Sender:          user.Name,
@@ -1181,6 +1183,7 @@ func notifApprover(trxID uint, approver string, sender string) {
 		CapexAmount:     humanize.FormatInteger("#.###,", int(capexTrx.TotalAmount)),
 		BudgetAvailable: humanize.FormatInteger("#.###,", int(budget.Remaining)),
 		BudgetDesc:      budget.BudgetDesc,
+		Domain:          os.Getenv("domain"),
 	})
 
 }
@@ -1201,9 +1204,11 @@ func notifAccounting(trxID uint) {
 	notification.SendEmail(to, subject, "accounting-appr.html", struct {
 		Name    string
 		CapexID string
+		Domain  string
 	}{
 		Name:    "Accounting Team",
 		CapexID: strconv.Itoa(int(trxID)),
+		Domain:  os.Getenv("domain"),
 	})
 }
 
@@ -1227,7 +1232,13 @@ func notifReject(trxID uint, message string) {
 		Name    string
 		CapexID string
 		Message string
-	}{Name: user.Name, CapexID: strconv.Itoa(int(trxID)), Message: message})
+		Domain  string
+	}{
+		Name:    user.Name,
+		CapexID: strconv.Itoa(int(trxID)),
+		Message: message,
+		Domain:  os.Getenv("domain"),
+	})
 
 }
 
@@ -1250,9 +1261,11 @@ func notifFullApprove(trxID uint) {
 	notification.SendEmail(to, subject, "full-approve.html", struct {
 		Name    string
 		CapexID string
+		Domain  string
 	}{
 		Name:    user.Name,
 		CapexID: strconv.Itoa(int(trxID)),
+		Domain:  os.Getenv("domain"),
 	})
 
 }

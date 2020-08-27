@@ -6,9 +6,12 @@
 		<div>
 			Dear Bapak/Ibu {{.Name}} <br />
 			Capex Anda dengan nomor {{.CapexID}} di tolak dengan alasan: <br />
-			<div style="white-space: pre-line;">
-				{{.Message}}
-			</div>
+			<div style="white-space: pre-line">{{.Message}}</div>
+			<br />
+			Silahkan klik link di bawah ini untuk informasi lebih lanjut: <br />
+			<a href="{{.Domain}}/capex/{{.CapexID}}"
+				>{{.Domain}}/capex/{{.CapexID}}</a
+			>
 		</div>
 	</body>
 </html>

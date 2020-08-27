@@ -6,6 +6,11 @@
 		<div>
 			Dear Bapak/Ibu {{.Name}} <br />
 			Capex Anda dengan nomor {{.CapexID}} telah di setujui.
+			<br />
+			Silahkan klik link di bawah ini untuk informasi lebih lanjut: <br />
+			<a href="{{.Domain}}/capex/{{.CapexID}}"
+				>{{.Domain}}/capex/{{.CapexID}}</a
+			>
 		</div>
 	</body>
 </html>
