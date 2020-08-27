@@ -40,8 +40,8 @@ func initDb() {
 func getCreateInfo(c *gin.Context) {
 	type budget struct {
 		BudgetCode   string `json:"budgetCode"`
-		BudgetAmount uint64 `json:"budgetAmount"`
-		Remaining    uint64 `json:"budgetRemaining"`
+		BudgetAmount int64  `json:"budgetAmount"`
+		Remaining    int64  `json:"budgetRemaining"`
 		OwnerName    string `json:"ownerName"`
 		Pernr        string `json:"payrollID"`
 		Position     string `json:"position"`
@@ -331,7 +331,7 @@ func createCapexTrx(c *gin.Context) {
 	capexTrx.RequestorPosition = user.Position
 
 	remainingAmount := struct {
-		Remaining uint64
+		Remaining int64
 	}{}
 	if capexTrx.BudgetType == "B" {
 		err = db.Table("tb_budget").
@@ -339,22 +339,16 @@ func createCapexTrx(c *gin.Context) {
 			Where("budget_code = ?", capexTrx.BudgetApprovalCode).
 			First(&remainingAmount).
 			Error
-		if err != nil || remainingAmount.Remaining <= 0 {
-			c.AbortWithError(http.StatusNotFound, errors.New("budget amount is not enough"))
+		if err != nil {
+			c.AbortWithError(http.StatusNotFound, errors.New("budget code tidak valid"))
 			c.JSON(http.StatusNotFound, gin.H{
-				"message": "budget amount is not enough",
+				"message": "budget code tidak valid",
 			})
 			return
 		}
 
-		remainingAmount.Remaining -= capexTrx.TotalAmount
-		if remainingAmount.Remaining < 0 {
-			c.AbortWithError(http.StatusNotFound, errors.New("budget amount is not enough"))
-			c.JSON(http.StatusNotFound, gin.H{
-				"message": "budget amount is not enough",
-			})
-			return
-		}
+		remainingAmount.Remaining -= int64(capexTrx.TotalAmount)
+
 	}
 
 	tx := db.Begin()
@@ -655,14 +649,6 @@ func approveCapex(c *gin.Context) {
 	// }{}
 
 	// c.BindJSON(&approveBody)
-
-	if capexID != "1" {
-		c.AbortWithError(http.StatusNotFound, errors.New("Capex ID not valid"))
-		c.JSON(http.StatusNotFound, gin.H{
-			"message": "Capex ID not valid",
-		})
-		return
-	}
 
 	var capexTrx CapexTrx
 	err = db.Where("id = ?", capexID).First(&capexTrx).Error
@@ -1169,12 +1155,13 @@ func notifApprover(trxID uint, approver string, sender string) {
 	_ = db.Where("ID = ?", trxID).First(&capexTrx).Error
 
 	budget := struct {
-		BudgetAmount int
-		Remaining    int
+		BudgetAmount int64
+		Remaining    int64
+		BudgetDesc   string
 	}{}
 
 	db.Table("tb_budget").
-		Select("budget_amount, remaining").
+		Select("budget_amount, remaining, budget_desc").
 		Where("budget_code = ?", capexTrx.BudgetApprovalCode).
 		First(&budget)
 
@@ -1185,13 +1172,15 @@ func notifApprover(trxID uint, approver string, sender string) {
 		BudgetAmount    string
 		CapexAmount     string
 		BudgetAvailable string
+		BudgetDesc      string
 	}{
 		CapexID:         strconv.Itoa(int(trxID)),
 		Sender:          user.Name,
 		BudgetCode:      capexTrx.BudgetApprovalCode,
-		BudgetAmount:    humanize.FormatInteger("#.###,", budget.BudgetAmount),
+		BudgetAmount:    humanize.FormatInteger("#.###,", int(budget.BudgetAmount)),
 		CapexAmount:     humanize.FormatInteger("#.###,", int(capexTrx.TotalAmount)),
-		BudgetAvailable: humanize.FormatInteger("#.###,", budget.Remaining),
+		BudgetAvailable: humanize.FormatInteger("#.###,", int(budget.Remaining)),
+		BudgetDesc:      budget.BudgetDesc,
 	})
 
 }
