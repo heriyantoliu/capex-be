@@ -20,6 +20,7 @@ type CapexTrx struct {
 	Uom                string `json:"uom"`
 	DeliveryDate       string `gorm:"type:date" json:"deliveryDate"`
 	Justification      string `json:"justification"`
+	UnitPrice          string `json:"unitPrice"`
 	TotalAmount        uint64 `json:"totalAmount"`
 	TotalBudget        uint64 `json:"totalBudget"`
 	Plant              string `json:"plant"`
