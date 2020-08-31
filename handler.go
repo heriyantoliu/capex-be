@@ -166,7 +166,7 @@ func getCreateInfo(c *gin.Context) {
 	}
 
 	err = db.Debug().Table("tb_budget as b").
-		Select("b.budget_code, b.budget_amount, b.owner_name, b.pernr, b.position, b.cost_center, b.budget_desc").
+		Select("b.budget_code, b.budget_amount, b.remaining, b.owner_name, b.pernr, b.position, b.cost_center, b.budget_desc").
 		Joins("JOIN cost_center_role as cr on b.cost_center = cr.cost_center").
 		Joins("JOIN user_cost_center_role as ucr on cr.role = ucr.role").
 		Where("ucr.username = ?", username).
