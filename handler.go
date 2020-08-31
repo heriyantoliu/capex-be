@@ -283,6 +283,23 @@ func getCapexTrxDetail(c *gin.Context) {
 		return
 	}
 
+	var ccRole CostCenterRole
+
+	err = db.Table("cost_center_role as cr").
+		Select("cr.cost_center").
+		Joins("JOIN user_cost_center_role as ucr on cr.role = ucr.role").
+		Joins("JOIN capex_trx as trx on ucr.cost_center = trx.cost_center").
+		Where("trx.cost_center = ?", capexTrx.CostCenter).
+		First(&ccRole).
+		Error
+	if err != nil {
+		c.AbortWithError(http.StatusForbidden, errors.New("Not Authorized"))
+		c.JSON(http.StatusForbidden, gin.H{
+			"message": "Not Authorized",
+		})
+		return
+	}
+
 	capexBody.CapexDetail = capexTrx
 
 	// var capexAppr []CapexAppr
