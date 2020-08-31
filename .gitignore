@@ -5,3 +5,5 @@ CAPEX/*
 *.exe
 .vscode
 dockerVolume
+hotReload.sh
+capex-linux-amd64

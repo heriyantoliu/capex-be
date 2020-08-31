@@ -35,7 +35,7 @@ func initDb() {
 	// defer db.Close()
 
 	db.SingularTable(true)
-	db.AutoMigrate(&CapexTrx{}, &Plant{}, &Approval{}, &CapexAppr{}, &UserRole{}, &User{}, &CapexAsset{})
+	db.AutoMigrate(&CapexTrx{}, &Plant{}, &Approval{}, &CapexAppr{}, &UserRole{}, &User{}, &CapexAsset{}, &UserCostCenterRole{}, &CostCenterRole{})
 }
 
 func getCreateInfo(c *gin.Context) {
@@ -102,19 +102,16 @@ func getCreateInfo(c *gin.Context) {
 		UomInfo        []uom        `json:"uomInfo"`
 	}{}
 
-	err := db.Table("tb_budget").Find(&infoBody.BudgetInfo).Error
-	if err != nil {
-		c.AbortWithStatus(404)
+	username := c.MustGet("USERNAME").(string)
+	if username == "" {
+		c.AbortWithError(http.StatusNotFound, errors.New("Username unknown"))
+		c.JSON(http.StatusNotFound, gin.H{
+			"message": "Username unknown",
+		})
 		return
 	}
 
-	err = db.Table("tb_purpose").Find(&infoBody.PurposeInfo).Error
-	if err != nil {
-		c.AbortWithStatus(404)
-		return
-	}
-
-	err = db.Table("tb_ccenter").Find(&infoBody.CostCenterInfo).Error
+	err := db.Table("tb_purpose").Find(&infoBody.PurposeInfo).Error
 	if err != nil {
 		c.AbortWithStatus(404)
 		return
@@ -151,6 +148,30 @@ func getCreateInfo(c *gin.Context) {
 	}
 
 	err = db.Table("tb_uom").Find(&infoBody.UomInfo).Error
+	if err != nil {
+		c.AbortWithStatus(404)
+		return
+	}
+
+	err = db.Debug().Table("tb_ccenter as c").
+		Select("c.ccenter, c.description").
+		Joins("JOIN cost_center_role as cr on c.ccenter = cr.cost_center").
+		Joins("JOIN user_cost_center_role as ucr on cr.role = ucr.role").
+		Where("ucr.username = ?", username).
+		Order("c.ccenter").
+		Find(&infoBody.CostCenterInfo).Error
+	if err != nil {
+		c.AbortWithStatus(404)
+		return
+	}
+
+	err = db.Debug().Table("tb_budget as b").
+		Select("b.budget_code, b.budget_amount, b.owner_name, b.pernr, b.position, b.cost_center, b.budget_desc").
+		Joins("JOIN cost_center_role as cr on b.cost_center = cr.cost_center").
+		Joins("JOIN user_cost_center_role as ucr on cr.role = ucr.role").
+		Where("ucr.username = ?", username).
+		Order("b.cost_center").
+		Find(&infoBody.BudgetInfo).Error
 	if err != nil {
 		c.AbortWithStatus(404)
 		return

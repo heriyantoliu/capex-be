@@ -99,3 +99,13 @@ type User struct {
 	Position  string `json:"position"`
 	PayrollID string `json:"payrollID"`
 }
+
+type CostCenterRole struct {
+	Role       string `json:"role"`
+	CostCenter string `json:"costCenter"`
+}
+
+type UserCostCenterRole struct {
+	Username string `json:"username"`
+	Role     string `json:"role"`
+}
