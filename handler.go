@@ -249,6 +249,15 @@ func getCapexTrx(c *gin.Context) {
 func getCapexTrxDetail(c *gin.Context) {
 	var err error
 
+	username := c.MustGet("USERNAME").(string)
+	if username == "" {
+		c.AbortWithError(http.StatusNotFound, errors.New("Username unknown"))
+		c.JSON(http.StatusNotFound, gin.H{
+			"message": "Username unknown",
+		})
+		return
+	}
+
 	ID := c.Param("id")
 
 	type capexApprover struct {
@@ -285,11 +294,11 @@ func getCapexTrxDetail(c *gin.Context) {
 
 	var ccRole CostCenterRole
 
-	err = db.Table("cost_center_role as cr").
+	err = db.Table("user_cost_center_role as ucr").
 		Select("cr.cost_center").
-		Joins("JOIN user_cost_center_role as ucr on cr.role = ucr.role").
-		Joins("JOIN capex_trx as trx on ucr.cost_center = trx.cost_center").
-		Where("trx.cost_center = ?", capexTrx.CostCenter).
+		Joins("JOIN cost_center_role as cr on ucr.role = cr.role").
+		Joins("JOIN capex_trx as trx on cr.cost_center = trx.cost_center").
+		Where("trx.cost_center = ? and ucr.username = ?", capexTrx.CostCenter, username).
 		First(&ccRole).
 		Error
 	if err != nil {
