@@ -2,8 +2,8 @@ capex
 gin-bin
 CAPEX/*
 .env
-*.exe
+*.exe*
 .vscode
 dockerVolume
-hotReload.sh
+hotReload*
 capex-linux-amd64

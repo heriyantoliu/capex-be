@@ -106,6 +106,7 @@ func main() {
 	r.GET("/user/:id/roles", getRoles)
 	r.GET("/user/:id", getUser)
 	r.PUT("/user/:id", updateUser)
+	r.GET("/budget", getBudget)
 	r.GET("/createInfo", getCreateInfo)
 
 	r.Run(":" + portApp)
@@ -151,6 +152,7 @@ func middleware(c *gin.Context) {
 	}
 
 	c.Set("USERNAME", claims["username"])
+	c.Set("ID", claims["id"])
 
 	c.Next()
 }

@@ -38,6 +38,45 @@ func initDb() {
 	db.AutoMigrate(&CapexTrx{}, &Plant{}, &Approval{}, &CapexAppr{}, &UserRole{}, &User{}, &CapexAsset{}, &UserCostCenterRole{}, &CostCenterRole{})
 }
 
+func getBudget(c *gin.Context) {
+
+	username := c.MustGet("USERNAME").(string)
+	if username == "" {
+		c.AbortWithError(http.StatusNotFound, errors.New("Username unknown"))
+		c.JSON(http.StatusNotFound, gin.H{
+			"message": "Username unknown",
+		})
+		return
+	}
+
+	respBody := []struct {
+		BudgetCode     string `json:"code"`
+		BudgetDesc     string `json:"description"`
+		BudgetAmount   int64  `json:"amount"`
+		Remaining      int64  `json:"remaining"`
+		CostCenter     string `json:"costCenter"`
+		CostCenterDesc string `json:"costCenterDesc"`
+	}{}
+
+	err := db.Debug().Table("tb_budget as b").
+		Select("b.budget_code, b.budget_desc, b.budget_amount, b.remaining, b.cost_center, cc.description as cost_center_desc").
+		Joins("JOIN tb_ccenter as cc on b.cost_center = cc.ccenter").
+		Joins("JOIN cost_center_role as cr on cc.ccenter = cr.cost_center").
+		Joins("JOIN user_cost_center_role as ucr on cr.role = ucr.role").
+		Where("ucr.username = ?", username).
+		Order("b.budget_code").
+		Find(&respBody).Error
+	if err != nil {
+		c.AbortWithError(http.StatusNotFound, errors.New("No Data"))
+		c.JSON(http.StatusNotFound, gin.H{
+			"message": "No Data",
+		})
+		return
+	}
+
+	c.JSON(200, respBody)
+}
+
 func getCreateInfo(c *gin.Context) {
 	type budget struct {
 		BudgetCode   string `json:"budgetCode"`
@@ -217,9 +256,34 @@ func getRoles(c *gin.Context) {
 func getCapexTrx(c *gin.Context) {
 	var err error
 
+	username := c.MustGet("USERNAME").(string)
+	if username == "" {
+		c.AbortWithError(http.StatusNotFound, errors.New("Username unknown"))
+		c.JSON(http.StatusNotFound, gin.H{
+			"message": "Username unknown",
+		})
+		return
+	}
+
 	createdBy := c.Query("created")
 	waitAppr := c.Query("wait_appr")
 	replicate, _ := strconv.ParseBool(c.Query("replicate"))
+
+	costCenter := []struct {
+		CostCenter string
+	}{}
+
+	err = db.Table("cost_center_role as cr").
+		Select("cr.cost_center").
+		Joins("JOIN user_cost_center_role as ucr on cr.role = ucr.role").
+		Where("username = ?", username).
+		Find(&costCenter).Error
+
+	filterCC := []string{}
+
+	for _, cc := range costCenter {
+		filterCC = append(filterCC, cc.CostCenter)
+	}
 
 	var capexTrxAll []CapexTrx
 	if createdBy != "" {
@@ -235,7 +299,7 @@ func getCapexTrx(c *gin.Context) {
 	} else if replicate {
 		err = db.Where("status in (?)", []string{"A", "SAP", "RI"}).Find(&capexTrxAll).Error
 	} else {
-		err = db.Find(&capexTrxAll).Error
+		err = db.Where("cost_center IN (?)", filterCC).Find(&capexTrxAll).Error
 	}
 
 	if err != nil || len(capexTrxAll) <= 0 {
