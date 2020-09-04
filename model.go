@@ -75,6 +75,11 @@ type CapexBudget struct {
 	CostCenter string `json:"costCenter"`
 	Amount     uint64 `json:"amount"`
 }
+type CapexAttachment struct {
+	CapexID   uint64 `gorm:"primary_key;auto_increment:false" json:"capexId"`
+	Filename  string `gorm:"primary_key" json:"filename"`
+	CreatedAt time.Time
+}
 
 type Plant struct {
 	gorm.Model

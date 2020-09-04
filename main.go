@@ -99,6 +99,7 @@ func main() {
 	r.POST("/capexTrx", createCapexTrx)
 	r.GET("/capexTrx/:id", getCapexTrxDetail)
 	r.PUT("/capexTrx/:id", updateCapexTrx)
+	r.POST("/capexTrx/:id/attachment", createAttachment)
 	r.POST("/capexTrx/:id/replicate", replicateCapex)
 	r.GET("/capexTrx/:id/asset", getCapexAsset)
 	r.PATCH("/capexTrx/:id/approve", approveCapex)

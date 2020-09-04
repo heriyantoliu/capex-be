@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -36,7 +37,8 @@ func initDb() {
 	// defer db.Close()
 
 	db.SingularTable(true)
-	db.AutoMigrate(&CapexTrx{}, &Plant{}, &Approval{}, &CapexAppr{}, &UserRole{}, &User{}, &CapexAsset{}, &UserCostCenterRole{}, &CostCenterRole{}, &CapexBudget{})
+
+	db.AutoMigrate(&CapexTrx{}, &Plant{}, &Approval{}, &CapexAppr{}, &UserRole{}, &User{}, &CapexAsset{}, &UserCostCenterRole{}, &CostCenterRole{}, &CapexAttachment{}, &CapexBudget{})
 }
 
 func getBudget(c *gin.Context) {
@@ -1403,6 +1405,53 @@ func createUser(c *gin.Context) {
 	db.Create(&user)
 	c.JSON(201, user)
 	return
+}
+
+func createAttachment(c *gin.Context) {
+	capexID := c.Param("id")
+
+	form, err := c.MultipartForm()
+	if err != nil {
+		c.AbortWithError(http.StatusBadRequest, errors.New("Failed to get Attachment"))
+		c.JSON(http.StatusNotFound, gin.H{
+			"message": "Failed to get Attachment",
+		})
+		return
+	}
+
+	files := form.File["files"]
+	path := "./public/attachment/" + capexID + "/"
+
+	_, err = os.Stat(path)
+	if os.IsNotExist(err) {
+		err = os.Mkdir(path, os.ModePerm)
+		if err != nil {
+			log.Println(err.Error())
+		}
+	}
+
+	capexAttachment := CapexAttachment{}
+
+	for _, file := range files {
+		filename := path + filepath.Base(file.Filename)
+		err = c.SaveUploadedFile(file, filename)
+		if err != nil {
+			c.AbortWithError(http.StatusBadRequest, errors.New("Failed to upload"))
+			c.JSON(http.StatusNotFound, gin.H{
+				"message": "Failed to upload",
+			})
+			return
+		}
+		capexAttachment.CapexID, _ = strconv.ParseUint(capexID, 10, 64)
+		capexAttachment.Filename = file.Filename
+
+		db.Create(&capexAttachment)
+	}
+
+	c.JSON(200, gin.H{
+		"message": "Upload complete",
+	})
+
 }
 
 func login(c *gin.Context) {
