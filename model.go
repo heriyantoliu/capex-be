@@ -8,31 +8,33 @@ import (
 
 type CapexTrx struct {
 	gorm.Model
-	RequestorPosition  string `json:"requestorPosition"`
-	BudgetOwner        string `json:"budgetOwner"`
-	CostCenter         string `json:"costCenter"`
-	Purpose            string `json:"purpose"`
-	BudgetType         string `sql:"type:ENUM('B','U')" json:"budgetType"`
-	BudgetApprovalCode string `json:"budgetApprovalCode"`
-	Description        string `json:"description"`
-	SerialNumber       string `json:"serialNumber"`
-	Quantity           uint64 `json:"quantity"`
-	Uom                string `json:"uom"`
-	DeliveryDate       string `gorm:"type:date" json:"deliveryDate"`
-	Justification      string `json:"justification"`
-	UnitPrice          uint64 `json:"unitPrice"`
-	TotalAmount        uint64 `json:"totalAmount"`
-	TotalBudget        uint64 `json:"totalBudget"`
-	Plant              string `json:"plant"`
-	StorageLocation    string `json:"storageLocation"`
-	CreatedBy          string `json:"createdBy"`
-	NextApproval       string `json:"nextApproval"`
-	Status             string `json:"status"`
-	ACCApproved        string `sql:"type:ENUM('X', '')" json:"ACCApproved"`
-	AssetClass         string `json:"assetClass"`
-	AssetActivityType  string `json:"assetActivityType"`
-	AssetGroup         string `json:"assetGroup"`
-	AssetGenMode       string `json:"assetGenMode"`
+	RequestorPosition string `json:"requestorPosition"`
+	BudgetOwner       string `json:"budgetOwner"`
+	CostCenter        string `json:"costCenter"`
+	Purpose           string `json:"purpose"`
+	BudgetType        string `json:"budgetType"`
+	Description       string `json:"description"`
+	SerialNumber      string `json:"serialNumber"`
+	Quantity          uint64 `json:"quantity"`
+	Uom               string `json:"uom"`
+	DeliveryDate      string `gorm:"type:date" json:"deliveryDate"`
+	Justification     string `json:"justification"`
+	UnitPrice         uint64 `json:"unitPrice"`
+	TotalAmount       uint64 `json:"totalAmount"`
+	TotalBudget       uint64 `json:"totalBudget"`
+	ForeignAmount     uint64 `json:"foreignAmount"`
+	ForeignCurrency   string `json:"foreignCurrency"`
+	Plant             string `json:"plant"`
+	StorageLocation   string `json:"storageLocation"`
+	CreatedBy         string `json:"createdBy"`
+	NextApproval      string `json:"nextApproval"`
+	Status            string `json:"status"`
+	ACCApproved       string `json:"ACCApproved"`
+	AssetClass        string `json:"assetClass"`
+	AssetActivityType string `json:"assetActivityType"`
+	AssetGroup        string `json:"assetGroup"`
+	AssetGenMode      string `json:"assetGenMode"`
+	AssetNote         string `json:"assetNote"`
 }
 
 type UserRole struct {
@@ -65,6 +67,13 @@ type CapexAsset struct {
 	AssetNo     string `gorm:"primary_key;auto_increment:false" json:"assetNo"`
 	AssetSubNo  string `gorm:"primary_key;auto_increment:false" json:"assetSubNo"`
 	CreatedAt   time.Time
+}
+
+type CapexBudget struct {
+	CapexID    uint   `gorm:"primary_key:auto_increment:false" json:"capexID"`
+	BudgetCode string `gorm:"primary_key" json:"budgetCode"`
+	CostCenter string `json:"costCenter"`
+	Amount     uint64 `json:"amount"`
 }
 
 type Plant struct {

@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
-	"github.com/dustin/go-humanize"
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/mysql"
@@ -35,7 +34,7 @@ func initDb() {
 	// defer db.Close()
 
 	db.SingularTable(true)
-	db.AutoMigrate(&CapexTrx{}, &Plant{}, &Approval{}, &CapexAppr{}, &UserRole{}, &User{}, &CapexAsset{}, &UserCostCenterRole{}, &CostCenterRole{})
+	db.AutoMigrate(&CapexTrx{}, &Plant{}, &Approval{}, &CapexAppr{}, &UserRole{}, &User{}, &CapexAsset{}, &UserCostCenterRole{}, &CostCenterRole{}, &CapexBudget{})
 }
 
 func getBudget(c *gin.Context) {
@@ -345,6 +344,7 @@ func getCapexTrxDetail(c *gin.Context) {
 		CapexDetail CapexTrx        `json:"capexDetail"`
 		Approver    []capexApprover `json:"approver"`
 		Requestor   requestor       `json:"requestorInfo"`
+		CapexBudget []CapexBudget   `json:"budget"`
 	}{}
 
 	var capexTrx CapexTrx
@@ -389,6 +389,8 @@ func getCapexTrxDetail(c *gin.Context) {
 		First(&capexBody.Requestor).
 		Error
 
+	err = db.Where("capex_id = ?", ID).Find(&capexBody.CapexBudget).Error
+
 	for idx, approver := range capexBody.Approver {
 		if approver.CreatedAt == approver.UpdatedAt {
 			capexBody.Approver[idx].UpdatedAt = time.Time{}
@@ -424,8 +426,15 @@ func createCapexTrx(c *gin.Context) {
 		return
 	}
 
+	respBody := struct {
+		Capex      CapexTrx      `json:"capex"`
+		BudgetCode []CapexBudget `json:"budgetCode"`
+	}{}
+
 	var capexTrx CapexTrx
-	err = c.BindJSON(&capexTrx)
+	var capexBudget []CapexBudget
+
+	err = c.BindJSON(&respBody)
 	if err != nil {
 		c.AbortWithError(http.StatusNotFound, err)
 		c.JSON(http.StatusNotFound, gin.H{
@@ -434,6 +443,8 @@ func createCapexTrx(c *gin.Context) {
 		return
 	}
 
+	capexTrx = respBody.Capex
+	capexBudget = respBody.BudgetCode
 	capexTrx.CreatedBy = username
 
 	var user User
@@ -442,24 +453,32 @@ func createCapexTrx(c *gin.Context) {
 
 	capexTrx.RequestorPosition = user.Position
 
-	remainingAmount := struct {
-		Remaining int64
+	tbBudget := struct {
+		budgetCode string
+		remaining  int64
+	}{}
+	tbBudgets := []struct {
+		budgetCode string
+		remaining  int64
 	}{}
 	if capexTrx.BudgetType == "B" {
-		err = db.Table("tb_budget").
-			Select("remaining").
-			Where("budget_code = ?", capexTrx.BudgetApprovalCode).
-			First(&remainingAmount).
-			Error
-		if err != nil {
-			c.AbortWithError(http.StatusNotFound, errors.New("budget code tidak valid"))
-			c.JSON(http.StatusNotFound, gin.H{
-				"message": "budget code tidak valid",
-			})
-			return
-		}
+		for _, budget := range capexBudget {
 
-		remainingAmount.Remaining -= int64(capexTrx.TotalAmount)
+			err = db.Table("tb_budget").
+				Select("budget_code, remaining").
+				Where("budget_code = ?", budget.BudgetCode).
+				First(&tbBudget).
+				Error
+			if err != nil {
+				c.AbortWithError(http.StatusNotFound, errors.New("budget code tidak valid"))
+				c.JSON(http.StatusNotFound, gin.H{
+					"message": "budget code tidak valid",
+				})
+				return
+			}
+			tbBudget.remaining -= int64(budget.Amount)
+			tbBudgets = append(tbBudgets, tbBudget)
+		}
 
 	}
 
@@ -474,16 +493,36 @@ func createCapexTrx(c *gin.Context) {
 		return
 	}
 
-	err = tx.Table("tb_budget").
-		Where("budget_code = ?", capexTrx.BudgetApprovalCode).
-		Updates(map[string]interface{}{"remaining": remainingAmount.Remaining}).Error
-	if err != nil {
-		tx.Rollback()
-		c.AbortWithError(http.StatusInternalServerError, err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"message": err.Error(),
-		})
-		return
+	var saveCapexBudget CapexBudget
+
+	for _, budget := range capexBudget {
+		saveCapexBudget.CapexID = capexTrx.ID
+		saveCapexBudget.BudgetCode = budget.BudgetCode
+		saveCapexBudget.CostCenter = budget.CostCenter
+		saveCapexBudget.Amount = budget.Amount
+		err = tx.Create(&saveCapexBudget).Error
+		if err != nil {
+			tx.Rollback()
+			c.AbortWithError(http.StatusInternalServerError, err)
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"message": err.Error(),
+			})
+			return
+		}
+	}
+
+	for _, budget := range tbBudgets {
+		err = tx.Table("tb_budget").
+			Where("budget_code = ?", budget.budgetCode).
+			Updates(map[string]interface{}{"remaining": budget.remaining}).Error
+		if err != nil {
+			tx.Rollback()
+			c.AbortWithError(http.StatusInternalServerError, err)
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"message": err.Error(),
+			})
+			return
+		}
 	}
 
 	err = tx.Commit().Error
@@ -999,6 +1038,9 @@ func rejectCapex(c *gin.Context) {
 
 	}
 
+	var capexBudget []CapexBudget
+	db.Where("capex_id = ?", capexID).Find(&capexBudget)
+
 	appr.Status = "R"
 
 	errorFound := false
@@ -1029,17 +1071,19 @@ func rejectCapex(c *gin.Context) {
 		}
 	}
 
-	err = tx.Table("tb_budget").
-		Where("budget_code = ?", capexTrx.BudgetApprovalCode).
-		Updates(map[string]interface{}{"remaining": gorm.Expr("remaining + ?", capexTrx.TotalAmount)}).
-		Error
-	if err != nil {
-		tx.Rollback()
-		c.AbortWithError(http.StatusInternalServerError, err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"message": err.Error(),
-		})
-		return
+	for _, budget := range capexBudget {
+		err = tx.Table("tb_budget").
+			Where("budget_code = ?", budget.BudgetCode).
+			Updates(map[string]interface{}{"remaining": gorm.Expr("remaining + ?", budget.Amount)}).
+			Error
+		if err != nil {
+			tx.Rollback()
+			c.AbortWithError(http.StatusInternalServerError, err)
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"message": err.Error(),
+			})
+			return
+		}
 	}
 
 	err = tx.Commit().Error
@@ -1249,53 +1293,53 @@ func login(c *gin.Context) {
 }
 
 func notifApprover(trxID uint, approver string, sender string) {
-	to := []string{}
-	subject := "Capex " + strconv.Itoa(int(trxID))
-	var user User
-	_ = db.Where("username = ?", approver).First(&user).Error
-	if user.ID == 0 {
-		return
-	}
+	// to := []string{}
+	// subject := "Capex " + strconv.Itoa(int(trxID))
+	// var user User
+	// _ = db.Where("username = ?", approver).First(&user).Error
+	// if user.ID == 0 {
+	// 	return
+	// }
 
+	// // to = append(to, user.Email)
 	// to = append(to, user.Email)
-	to = append(to, user.Email)
 
-	user = User{}
-	_ = db.Where("username = ?", sender).First(&user).Error
+	// user = User{}
+	// _ = db.Where("username = ?", sender).First(&user).Error
 
-	var capexTrx CapexTrx
-	_ = db.Where("ID = ?", trxID).First(&capexTrx).Error
+	// var capexTrx CapexTrx
+	// _ = db.Where("ID = ?", trxID).First(&capexTrx).Error
 
-	budget := struct {
-		BudgetAmount int64
-		Remaining    int64
-		BudgetDesc   string
-	}{}
+	// budget := struct {
+	// 	BudgetAmount int64
+	// 	Remaining    int64
+	// 	BudgetDesc   string
+	// }{}
 
-	db.Table("tb_budget").
-		Select("budget_amount, remaining, budget_desc").
-		Where("budget_code = ?", capexTrx.BudgetApprovalCode).
-		First(&budget)
+	// db.Table("tb_budget").
+	// 	Select("budget_amount, remaining, budget_desc").
+	// 	Where("budget_code = ?", capexTrx.BudgetApprovalCode).
+	// 	First(&budget)
 
-	notification.SendEmail(to, subject, "approval.html", struct {
-		CapexID         string
-		Sender          string
-		BudgetCode      string
-		BudgetAmount    string
-		CapexAmount     string
-		BudgetAvailable string
-		BudgetDesc      string
-		Domain          string
-	}{
-		CapexID:         strconv.Itoa(int(trxID)),
-		Sender:          user.Name,
-		BudgetCode:      capexTrx.BudgetApprovalCode,
-		BudgetAmount:    humanize.FormatInteger("#.###,", int(budget.BudgetAmount)),
-		CapexAmount:     humanize.FormatInteger("#.###,", int(capexTrx.TotalAmount)),
-		BudgetAvailable: humanize.FormatInteger("#.###,", int(budget.Remaining)),
-		BudgetDesc:      budget.BudgetDesc,
-		Domain:          os.Getenv("domain"),
-	})
+	// notification.SendEmail(to, subject, "approval.html", struct {
+	// 	CapexID         string
+	// 	Sender          string
+	// 	BudgetCode      string
+	// 	BudgetAmount    string
+	// 	CapexAmount     string
+	// 	BudgetAvailable string
+	// 	BudgetDesc      string
+	// 	Domain          string
+	// }{
+	// 	CapexID:         strconv.Itoa(int(trxID)),
+	// 	Sender:          user.Name,
+	// 	BudgetCode:      capexTrx.BudgetApprovalCode,
+	// 	BudgetAmount:    humanize.FormatInteger("#.###,", int(budget.BudgetAmount)),
+	// 	CapexAmount:     humanize.FormatInteger("#.###,", int(capexTrx.TotalAmount)),
+	// 	BudgetAvailable: humanize.FormatInteger("#.###,", int(budget.Remaining)),
+	// 	BudgetDesc:      budget.BudgetDesc,
+	// 	Domain:          os.Getenv("domain"),
+	// })
 
 }
 
