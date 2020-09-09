@@ -12,7 +12,7 @@ import (
 )
 
 // SendEmail ... Function to send email
-func SendEmail(to []string, subject string, templateHTML string, bodyVar interface{}) {
+func SendEmail(to []string, subject string, templateHTML string, bodyVar interface{}, funcMap map[string]interface{}) {
 
 	_ = godotenv.Load()
 
@@ -27,6 +27,8 @@ func SendEmail(to []string, subject string, templateHTML string, bodyVar interfa
 	if err != nil {
 		log.Println(err.Error())
 	}
+
+	t.Funcs(funcMap)
 
 	var body bytes.Buffer
 

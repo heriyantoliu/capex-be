@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"html/template"
 	"net/http"
 	"os"
 	"strconv"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
+	"github.com/dustin/go-humanize"
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/mysql"
@@ -57,7 +59,7 @@ func getBudget(c *gin.Context) {
 		CostCenterDesc string `json:"costCenterDesc"`
 	}{}
 
-	err := db.Debug().Table("tb_budget as b").
+	err := db.Table("tb_budget as b").
 		Select("b.budget_code, b.budget_desc, b.budget_amount, b.remaining, b.cost_center, cc.description as cost_center_desc").
 		Joins("JOIN tb_ccenter as cc on b.cost_center = cc.ccenter").
 		Joins("JOIN cost_center_role as cr on cc.ccenter = cr.cost_center").
@@ -454,12 +456,12 @@ func createCapexTrx(c *gin.Context) {
 	capexTrx.RequestorPosition = user.Position
 
 	tbBudget := struct {
-		budgetCode string
-		remaining  int64
+		BudgetCode string
+		Remaining  int64
 	}{}
 	tbBudgets := []struct {
-		budgetCode string
-		remaining  int64
+		BudgetCode string
+		Remaining  int64
 	}{}
 	if capexTrx.BudgetType == "B" {
 		for _, budget := range capexBudget {
@@ -476,7 +478,7 @@ func createCapexTrx(c *gin.Context) {
 				})
 				return
 			}
-			tbBudget.remaining -= int64(budget.Amount)
+			tbBudget.Remaining -= int64(budget.Amount)
 			tbBudgets = append(tbBudgets, tbBudget)
 		}
 
@@ -513,8 +515,8 @@ func createCapexTrx(c *gin.Context) {
 
 	for _, budget := range tbBudgets {
 		err = tx.Table("tb_budget").
-			Where("budget_code = ?", budget.budgetCode).
-			Updates(map[string]interface{}{"remaining": budget.remaining}).Error
+			Where("budget_code = ?", budget.BudgetCode).
+			Updates(map[string]interface{}{"remaining": budget.Remaining}).Error
 		if err != nil {
 			tx.Rollback()
 			c.AbortWithError(http.StatusInternalServerError, err)
@@ -1293,22 +1295,22 @@ func login(c *gin.Context) {
 }
 
 func notifApprover(trxID uint, approver string, sender string) {
-	// to := []string{}
-	// subject := "Capex " + strconv.Itoa(int(trxID))
-	// var user User
-	// _ = db.Where("username = ?", approver).First(&user).Error
-	// if user.ID == 0 {
-	// 	return
-	// }
+	to := []string{}
+	subject := "Capex " + strconv.Itoa(int(trxID))
+	var user User
+	_ = db.Where("username = ?", approver).First(&user).Error
+	if user.ID == 0 {
+		return
+	}
 
-	// // to = append(to, user.Email)
 	// to = append(to, user.Email)
+	to = append(to, user.Email)
 
-	// user = User{}
-	// _ = db.Where("username = ?", sender).First(&user).Error
+	user = User{}
+	_ = db.Where("username = ?", sender).First(&user).Error
 
-	// var capexTrx CapexTrx
-	// _ = db.Where("ID = ?", trxID).First(&capexTrx).Error
+	var capexTrx CapexTrx
+	_ = db.Where("ID = ?", trxID).First(&capexTrx).Error
 
 	// budget := struct {
 	// 	BudgetAmount int64
@@ -1321,25 +1323,43 @@ func notifApprover(trxID uint, approver string, sender string) {
 	// 	Where("budget_code = ?", capexTrx.BudgetApprovalCode).
 	// 	First(&budget)
 
-	// notification.SendEmail(to, subject, "approval.html", struct {
-	// 	CapexID         string
-	// 	Sender          string
-	// 	BudgetCode      string
-	// 	BudgetAmount    string
-	// 	CapexAmount     string
-	// 	BudgetAvailable string
-	// 	BudgetDesc      string
-	// 	Domain          string
-	// }{
-	// 	CapexID:         strconv.Itoa(int(trxID)),
-	// 	Sender:          user.Name,
-	// 	BudgetCode:      capexTrx.BudgetApprovalCode,
-	// 	BudgetAmount:    humanize.FormatInteger("#.###,", int(budget.BudgetAmount)),
-	// 	CapexAmount:     humanize.FormatInteger("#.###,", int(capexTrx.TotalAmount)),
-	// 	BudgetAvailable: humanize.FormatInteger("#.###,", int(budget.Remaining)),
-	// 	BudgetDesc:      budget.BudgetDesc,
-	// 	Domain:          os.Getenv("domain"),
-	// })
+	type budget struct {
+		Code        string
+		Amount      int64
+		CapexAmount int64
+		Available   int64
+		Desc        string
+	}
+
+	var budgets []budget
+	db.Table("capex_budget as cb").
+		Select("cb.budget_code as code, b.budget_amount as amount, cb.amount as capex_amount, b.remaining as available, b.budget_desc as desc").
+		Joins("JOIN tb_budget as b on cb.budget_code = b.budget_code").
+		Where("cb.capex_id", capexTrx.ID).
+		Find(&budgets)
+
+	var funcMap = template.FuncMap{
+		"separator": func(val int64) string {
+			return humanize.FormatInteger("#.###,", int(val))
+		},
+	}
+
+	notification.SendEmail(to, subject, "approval.html", struct {
+		CapexID string
+		Sender  string
+		Budgets []budget
+		Domain  string
+	}{
+		CapexID: strconv.Itoa(int(trxID)),
+		Sender:  user.Name,
+		Budgets: budgets,
+		// BudgetCode:      capexTrx.BudgetApprovalCode,
+		// BudgetAmount:    humanize.FormatInteger("#.###,", int(budget.BudgetAmount)),
+		// CapexAmount:     humanize.FormatInteger("#.###,", int(capexTrx.TotalAmount)),
+		// BudgetAvailable: humanize.FormatInteger("#.###,", int(budget.Remaining)),
+		// BudgetDesc:      budget.BudgetDesc,
+		Domain: os.Getenv("domain"),
+	}, funcMap)
 
 }
 
@@ -1364,7 +1384,7 @@ func notifAccounting(trxID uint) {
 		Name:    "Accounting Team",
 		CapexID: strconv.Itoa(int(trxID)),
 		Domain:  os.Getenv("domain"),
-	})
+	}, map[string]interface{}{})
 }
 
 func notifReject(trxID uint, message string) {
@@ -1393,7 +1413,7 @@ func notifReject(trxID uint, message string) {
 		CapexID: strconv.Itoa(int(trxID)),
 		Message: message,
 		Domain:  os.Getenv("domain"),
-	})
+	}, map[string]interface{}{})
 
 }
 
@@ -1421,7 +1441,7 @@ func notifFullApprove(trxID uint) {
 		Name:    user.Name,
 		CapexID: strconv.Itoa(int(trxID)),
 		Domain:  os.Getenv("domain"),
-	})
+	}, map[string]interface{}{})
 
 }
 

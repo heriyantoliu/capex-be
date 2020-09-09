@@ -1,6 +1,16 @@
 <html>
 	<head>
 		<title>Capex Approval</title>
+		<style>
+			td,
+			th {
+				border: 1px solid black;
+			}
+
+			table {
+				border-collapse: collapse;
+			}
+		</style>
 	</head>
 	<body>
 		<div>
@@ -8,27 +18,26 @@
 			Capex ID {{.CapexID}} has been update from {{.Sender}}, please approve
 			:<br /><br />
 			<table>
-				<tr>
-					<td>Budget Code</td>
-					<td>:</td>
-					<td>{{.BudgetCode}} | {{.BudgetDesc}}</td>
-				</tr>
-				<tr>
-					<td>Budget</td>
-					<td>:</td>
-					<td style="text-align: right">{{.BudgetAmount}}</td>
-				</tr>
-				<tr>
-					<td>Amount Assigned</td>
-					<td>:</td>
-					<td style="text-align: right">{{.CapexAmount}}</td>
-				</tr>
-				<tr>
-					<td>Budget Available</td>
-					<td>:</td>
-					<td style="text-align: right">{{.BudgetAvailable}}</td>
-				</tr>
+				<thead>
+					<tr>
+						<th>Code</th>
+						<th>Budget</th>
+						<th>Amount Assigned</th>
+						<th>Budget Available</th>
+					</tr>
+				</thead>
+				<tbody>
+					{{range .Budgets}}
+					<tr>
+						<td>{{.Code}} | {{.Desc}}</td>
+						<td style="text-align: right">{{separator .Amount}}</td>
+						<td style="text-align: right">{{separator .CapexAmount}}</td>
+						<td style="text-align: right">{{separator .Available}}</td>
+					</tr>
+					{{end}}
+				</tbody>
 			</table>
+
 			<br />
 			Silahkan klik link di bawah ini untuk informasi lebih lanjut: <br />
 			<a href="{{.Domain}}/capex/{{.CapexID}}"
