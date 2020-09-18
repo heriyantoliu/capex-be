@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -345,10 +346,11 @@ func getCapexTrxDetail(c *gin.Context) {
 	}
 
 	capexBody := struct {
-		CapexDetail CapexTrx        `json:"capexDetail"`
-		Approver    []capexApprover `json:"approver"`
-		Requestor   requestor       `json:"requestorInfo"`
-		CapexBudget []CapexBudget   `json:"budget"`
+		CapexDetail CapexTrx          `json:"capexDetail"`
+		Approver    []capexApprover   `json:"approver"`
+		Requestor   requestor         `json:"requestorInfo"`
+		CapexBudget []CapexBudget     `json:"budget"`
+		Attachments []CapexAttachment `json:"attachments"`
 	}{}
 
 	var capexTrx CapexTrx
@@ -381,19 +383,19 @@ func getCapexTrxDetail(c *gin.Context) {
 
 	// var capexAppr []CapexAppr
 	// err = db.Where("capex_id = ?", ID).Find(&capexBody.Approver).Error
-	err = db.Table("capex_appr as c").
+	db.Table("capex_appr as c").
 		Select("c.seq, c.approver, c.status, c.remark, c.created_at, c.updated_at, u.name").Joins("JOIN user as u on c.approver = u.username").
 		Where("c.capex_id = ?", ID).Order("seq").
-		Find(&capexBody.Approver).
-		Error
+		Find(&capexBody.Approver)
 
-	err = db.Table("user").
+	db.Table("user").
 		Select("username, name, position, payroll_id").
 		Where("username = ?", capexBody.CapexDetail.CreatedBy).
-		First(&capexBody.Requestor).
-		Error
+		First(&capexBody.Requestor)
 
-	err = db.Where("capex_id = ?", ID).Find(&capexBody.CapexBudget).Error
+	db.Where("capex_id = ?", capexTrx.ID).Find(&capexBody.Attachments)
+
+	db.Where("capex_id = ?", ID).Find(&capexBody.CapexBudget)
 
 	for idx, approver := range capexBody.Approver {
 		if approver.CreatedAt == approver.UpdatedAt {
@@ -1451,6 +1453,93 @@ func createAttachment(c *gin.Context) {
 	c.JSON(200, gin.H{
 		"message": "Upload complete",
 	})
+
+}
+
+func getAttachment(c *gin.Context) {
+	capexID := c.Param("id")
+	filename := c.Param("filename")
+
+	var capexAttachment CapexAttachment
+
+	err := db.Where("capex_id = ? AND filename = ?", capexID, filename).First(&capexAttachment).Error
+	if err != nil {
+		c.AbortWithError(http.StatusNotFound, errors.New("File not found"))
+		c.JSON(http.StatusNotFound, gin.H{
+			"message": "File not found",
+		})
+		return
+	}
+
+	path := "./public/attachment/" + capexID + "/" + filename
+
+	file, err := os.Open(path)
+	if err != nil {
+		c.AbortWithError(http.StatusNotFound, errors.New("File not found"))
+		c.JSON(http.StatusNotFound, gin.H{
+			"message": "File not found",
+		})
+		return
+	}
+
+	defer file.Close()
+
+	c.Writer.Header().Add("Content-Type", "application/octet-stream")
+	_, err = io.Copy(c.Writer, file)
+	if err != nil {
+		c.AbortWithError(http.StatusNotFound, errors.New("Error when download"))
+		c.JSON(http.StatusNotFound, gin.H{
+			"message": "Error when download",
+		})
+		return
+	}
+
+}
+
+func deleteAttachment(c *gin.Context) {
+	capexID := c.Param("id")
+	filename := c.Param("filename")
+
+	var capexAttachment CapexAttachment
+
+	err := db.Where("capex_id = ? AND filename = ?", capexID, filename).First(&capexAttachment).Error
+	if err != nil {
+		c.AbortWithError(http.StatusNotFound, errors.New("File not found"))
+		c.JSON(http.StatusNotFound, gin.H{
+			"message": "File not found",
+		})
+		return
+	}
+
+	tx := db.Begin()
+	err = tx.Delete(&capexAttachment).Error
+	if err != nil {
+		tx.Rollback()
+		c.AbortWithError(http.StatusInternalServerError, errors.New("Fail to delete"))
+		c.JSON(http.StatusNotFound, gin.H{
+			"message": "Fail to delete",
+		})
+		return
+	}
+
+	path := "./public/attachment/" + capexID + "/" + filename
+	err = os.Remove(path)
+	if err != nil {
+		tx.Rollback()
+		c.AbortWithError(http.StatusInternalServerError, errors.New("Fail to delete"))
+		c.JSON(http.StatusNotFound, gin.H{
+			"message": "Fail to delete",
+		})
+		return
+	}
+
+	tx.Commit()
+
+	c.JSON(200, gin.H{
+		"message": "Delete complete",
+	})
+
+	return
 
 }
 
