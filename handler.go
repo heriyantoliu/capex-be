@@ -850,6 +850,7 @@ func updateCapexTrx(c *gin.Context) {
 		capexTrx.AssetGenMode = resBody.AssetGenMode
 		capexTrx.ACCApproved = "X"
 		capexTrx.Status = "I"
+		capexTrx.Justification = resBody.Justification
 
 		var approval []Approval
 		err = db.Where("cost_center = ? and asset_class = ? and amount_low <= ? and amount_high >= ?",
@@ -882,6 +883,7 @@ func updateCapexTrx(c *gin.Context) {
 			ACCApproved:       "X",
 			Status:            "I",
 			NextApproval:      capexTrx.NextApproval,
+			Justification:     capexTrx.Justification,
 		}).Error
 		// err = tx.Save(&capexTrx).Error
 		if err != nil {
