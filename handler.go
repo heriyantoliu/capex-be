@@ -6,7 +6,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"html/template"
+	"log"
 	"net/http"
 	"os"
 	"strconv"
@@ -631,23 +631,29 @@ func updateCapexTrx(c *gin.Context) {
 
 	capexID := c.Param("id")
 
-	var resBody, capexTrx CapexTrx
-	c.BindJSON(&resBody)
-	if resBody.AssetClass == "" {
-		c.AbortWithError(http.StatusNotFound, errors.New("Asset Class must be filled"))
-		c.JSON(http.StatusNotFound, gin.H{
-			"message": "Asset Class must be filled",
-		})
-		return
-	}
+	var resBody = struct {
+		CostCenter        string        `json:"costCenter"`
+		Purpose           string        `json:"purpose"`
+		BudgetType        string        `json:"budgetType"`
+		Description       string        `json:"description"`
+		SerialNumber      string        `json:"serialNumber"`
+		Quantity          uint64        `json:"quantity"`
+		Uom               string        `json:"uom"`
+		DeliveryDate      string        `gorm:"type:date" json:"deliveryDate"`
+		Justification     string        `json:"justification"`
+		UnitPrice         uint64        `json:"unitPrice"`
+		TotalAmount       uint64        `json:"totalAmount"`
+		Plant             string        `json:"plant"`
+		StorageLocation   string        `json:"storageLocation"`
+		AssetClass        string        `json:"assetClass"`
+		AssetActivityType string        `json:"assetActivityType"`
+		AssetGroup        string        `json:"assetGroup"`
+		AssetGenMode      string        `json:"assetGenMode"`
+		Budget            []CapexBudget `json:"budgetCode"`
+	}{}
 
-	if resBody.AssetGenMode == "" {
-		c.AbortWithError(http.StatusNotFound, errors.New("Asset generation mode must be filled"))
-		c.JSON(http.StatusNotFound, gin.H{
-			"message": "Asset generation mode must be filled",
-		})
-		return
-	}
+	var capexTrx CapexTrx
+	c.BindJSON(&resBody)
 
 	err = db.Where("id = ?", capexID).First(&capexTrx).Error
 	if err != nil || capexTrx.ID == 0 {
@@ -658,68 +664,124 @@ func updateCapexTrx(c *gin.Context) {
 		return
 	}
 
-	capexTrx.AssetClass = resBody.AssetClass
-	capexTrx.AssetActivityType = resBody.AssetActivityType
-	capexTrx.AssetGroup = resBody.AssetGroup
-	capexTrx.AssetGenMode = resBody.AssetGenMode
-	capexTrx.ACCApproved = "X"
-	capexTrx.Status = "I"
+	if resBody.AssetClass == "" && resBody.AssetGenMode == "" {
 
-	var approval []Approval
-	err = db.Where("cost_center = ? and asset_class = ? and amount_low <= ? and amount_high >= ?",
-		capexTrx.CostCenter,
-		capexTrx.AssetClass,
-		capexTrx.TotalAmount,
-		capexTrx.TotalAmount,
-	).Order("seq").Find(&approval).Error
-	if err != nil || len(approval) <= 0 {
-		c.AbortWithError(http.StatusNotFound, errors.New("Approval not found"))
-		c.JSON(http.StatusNotFound, gin.H{
-			"message": "Approval not found",
-		})
-		return
-	}
+		// var capexBudget []CapexBudget
 
-	for _, appr := range approval {
-		if appr.Seq == 1 {
-			capexTrx.NextApproval = appr.Approver
-			break
+		if capexTrx.Status != "" {
+			c.AbortWithError(http.StatusBadRequest, errors.New("Not allowed to change capex"))
+			c.JSON(http.StatusNotFound, gin.H{
+				"message": "Not allowed to change capex",
+			})
+			return
 		}
-	}
 
-	tx := db.Begin()
-	err = tx.Model(&capexTrx).Updates(CapexTrx{
-		AssetClass:        resBody.AssetClass,
-		AssetActivityType: resBody.AssetActivityType,
-		AssetGroup:        resBody.AssetGroup,
-		AssetGenMode:      resBody.AssetGenMode,
-		ACCApproved:       "X",
-		Status:            "I",
-		NextApproval:      capexTrx.NextApproval,
-	}).Error
-	// err = tx.Save(&capexTrx).Error
-	if err != nil {
-		tx.Rollback()
-		c.AbortWithError(http.StatusInternalServerError, err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"message": err.Error(),
-		})
-		return
-	}
+		capexTrx.CostCenter = resBody.CostCenter
+		capexTrx.Purpose = resBody.Purpose
+		capexTrx.Description = resBody.Description
+		capexTrx.BudgetType = resBody.BudgetType
+		capexTrx.SerialNumber = resBody.SerialNumber
+		capexTrx.Quantity = resBody.Quantity
+		capexTrx.Uom = resBody.Uom
+		capexTrx.DeliveryDate = resBody.DeliveryDate
+		capexTrx.Justification = resBody.Justification
+		capexTrx.UnitPrice = resBody.UnitPrice
+		capexTrx.TotalAmount = resBody.TotalAmount
+		capexTrx.Plant = resBody.Plant
+		capexTrx.StorageLocation = resBody.StorageLocation
+		capexTrx.AssetActivityType = resBody.AssetActivityType
+		capexBudget := resBody.Budget
+		log.Println(capexBudget)
 
-	// errorFound := false
+		tbBudget := struct {
+			BudgetCode string
+			Remaining  int64
+		}{}
+		tbBudgets := []struct {
+			BudgetCode string
+			Remaining  int64
+		}{}
 
-	for _, appr := range approval {
-		err = tx.Create(&CapexAppr{
-			CapexID:   capexTrx.ID,
-			Seq:       appr.Seq,
-			Approver:  appr.Approver,
-			Status:    "",
-			Remark:    "",
-			CreatedAt: time.Now(),
-		}).Error
+		var currentBudget CapexBudget
+		var currentBudgets []CapexBudget
+		if capexTrx.BudgetType == "B" {
+
+			db.Where("capex_id = ?", capexTrx.ID).Find(&currentBudgets)
+
+			for _, budget := range currentBudgets {
+				db.Table("tb_budget").
+					Select("budget_code, remaining").
+					Where("budget_code = ?", budget.BudgetCode).
+					First(&tbBudget)
+				tbBudget.Remaining += int64(budget.Amount)
+				tbBudgets = append(tbBudgets, tbBudget)
+			}
+
+			for _, budget := range capexBudget {
+
+				for _, currentBudget = range currentBudgets {
+					if currentBudget.BudgetCode == budget.BudgetCode {
+						return
+					}
+				}
+
+				if currentBudget.BudgetCode == budget.BudgetCode {
+					var idx int
+					for idx, tbBudget = range tbBudgets {
+						if tbBudget.BudgetCode == budget.BudgetCode {
+							return
+						}
+					}
+
+					tbBudgets[idx].Remaining -= int64(budget.Amount)
+
+				} else {
+					err = db.Table("tb_budget").
+						Select("budget_code, remaining").
+						Where("budget_code = ?", budget.BudgetCode).
+						First(&tbBudget).Error
+					if err != nil {
+						c.AbortWithError(http.StatusNotFound, errors.New("budget code tidak valid"))
+						c.JSON(http.StatusNotFound, gin.H{
+							"message": "budget code tidak valid",
+						})
+						return
+					}
+
+					tbBudget.Remaining -= int64(budget.Amount)
+					tbBudgets = append(tbBudgets, tbBudget)
+				}
+
+				// err = db.Table("tb_budget").
+				// 	Select("budget_code, remaining").
+				// 	Where("budget_code = ?", budget.BudgetCode).
+				// 	First(&tbBudget).
+				// 	Error
+				// if err != nil {
+				// 	c.AbortWithError(http.StatusNotFound, errors.New("budget code tidak valid"))
+				// 	c.JSON(http.StatusNotFound, gin.H{
+				// 		"message": "budget code tidak valid",
+				// 	})
+				// 	return
+				// }
+
+				// err = db.Where("capex_id = ? AND budget_code = ?", capexTrx.ID, budget.BudgetCode).First(&currentBudget).Error
+				// if err != nil {
+				// 	tbBudget.Remaining -= int64(budget.Amount)
+				// } else {
+				// 	tbBudget.Remaining = tbBudget.Remaining + int64(currentBudget.Amount) - int64(budget.Amount)
+				// }
+				// tbBudgets = append(tbBudgets, tbBudget)
+			}
+
+		}
+
+		log.Println(capexBudget)
+		log.Println(tbBudgets)
+
+		tx := db.Begin()
+		err := tx.Save(&capexTrx).Error
 		if err != nil {
-			// errorFound = true
 			tx.Rollback()
 			c.AbortWithError(http.StatusInternalServerError, err)
 			c.JSON(http.StatusInternalServerError, gin.H{
@@ -727,18 +789,143 @@ func updateCapexTrx(c *gin.Context) {
 			})
 			return
 		}
-	}
 
-	err = tx.Commit().Error
-	if err != nil {
-		c.AbortWithError(http.StatusInternalServerError, err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"message": err.Error(),
-		})
+		err = tx.Delete(CapexBudget{}, "capex_id = ?", capexTrx.ID).Error
+		if err != nil {
+			tx.Rollback()
+			c.AbortWithError(http.StatusInternalServerError, err)
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"message": err.Error(),
+			})
+			return
+		}
+
+		var saveCapexBudget CapexBudget
+		for _, budget := range capexBudget {
+			saveCapexBudget.CapexID = capexTrx.ID
+			saveCapexBudget.BudgetCode = budget.BudgetCode
+			saveCapexBudget.CostCenter = budget.CostCenter
+			saveCapexBudget.Amount = budget.Amount
+			err = tx.Create(&saveCapexBudget).Error
+			if err != nil {
+				tx.Rollback()
+				c.AbortWithError(http.StatusInternalServerError, err)
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"message": err.Error(),
+				})
+				return
+			}
+		}
+
+		for _, budget := range tbBudgets {
+			err = tx.Table("tb_budget").
+				Where("budget_code = ?", budget.BudgetCode).
+				Updates(map[string]interface{}{"remaining": budget.Remaining}).Error
+			if err != nil {
+				tx.Rollback()
+				c.AbortWithError(http.StatusInternalServerError, err)
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"message": err.Error(),
+				})
+				return
+			}
+		}
+
+		err = tx.Commit().Error
+		if err != nil {
+			c.AbortWithError(http.StatusInternalServerError, err)
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"message": err.Error(),
+			})
+			return
+		}
+		c.JSON(200, capexTrx)
 		return
-	}
 
-	go notifApprover(capexTrx.ID, capexTrx.NextApproval, username)
+	} else if resBody.AssetClass != "" && resBody.AssetGenMode != "" {
+
+		capexTrx.AssetClass = resBody.AssetClass
+		capexTrx.AssetActivityType = resBody.AssetActivityType
+		capexTrx.AssetGroup = resBody.AssetGroup
+		capexTrx.AssetGenMode = resBody.AssetGenMode
+		capexTrx.ACCApproved = "X"
+		capexTrx.Status = "I"
+
+		var approval []Approval
+		err = db.Where("cost_center = ? and asset_class = ? and amount_low <= ? and amount_high >= ?",
+			capexTrx.CostCenter,
+			capexTrx.AssetClass,
+			capexTrx.TotalAmount,
+			capexTrx.TotalAmount,
+		).Order("seq").Find(&approval).Error
+		if err != nil || len(approval) <= 0 {
+			c.AbortWithError(http.StatusNotFound, errors.New("Approval not found"))
+			c.JSON(http.StatusNotFound, gin.H{
+				"message": "Approval not found",
+			})
+			return
+		}
+
+		for _, appr := range approval {
+			if appr.Seq == 1 {
+				capexTrx.NextApproval = appr.Approver
+				break
+			}
+		}
+
+		tx := db.Begin()
+		err = tx.Model(&capexTrx).Updates(CapexTrx{
+			AssetClass:        capexTrx.AssetClass,
+			AssetActivityType: capexTrx.AssetActivityType,
+			AssetGroup:        capexTrx.AssetGroup,
+			AssetGenMode:      capexTrx.AssetGenMode,
+			ACCApproved:       "X",
+			Status:            "I",
+			NextApproval:      capexTrx.NextApproval,
+		}).Error
+		// err = tx.Save(&capexTrx).Error
+		if err != nil {
+			tx.Rollback()
+			c.AbortWithError(http.StatusInternalServerError, err)
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"message": err.Error(),
+			})
+			return
+		}
+
+		// errorFound := false
+
+		for _, appr := range approval {
+			err = tx.Create(&CapexAppr{
+				CapexID:   capexTrx.ID,
+				Seq:       appr.Seq,
+				Approver:  appr.Approver,
+				Status:    "",
+				Remark:    "",
+				CreatedAt: time.Now(),
+			}).Error
+			if err != nil {
+				// errorFound = true
+				tx.Rollback()
+				c.AbortWithError(http.StatusInternalServerError, err)
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"message": err.Error(),
+				})
+				return
+			}
+		}
+
+		err = tx.Commit().Error
+		if err != nil {
+			c.AbortWithError(http.StatusInternalServerError, err)
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"message": err.Error(),
+			})
+			return
+		}
+
+		go notifApprover(capexTrx.ID, capexTrx.NextApproval, username)
+	}
 
 	c.JSON(200, capexTrx)
 	return
@@ -1324,24 +1511,33 @@ func notifApprover(trxID uint, approver string, sender string) {
 	// 	First(&budget)
 
 	type budget struct {
-		Code        string
-		Amount      int64
-		CapexAmount int64
-		Available   int64
-		Desc        string
+		Code            string
+		Amount          int64
+		CapexAmount     int64
+		Available       int64
+		Descr           string
+		AmountText      string
+		CapexAmountText string
+		AvailableText   string
 	}
 
 	var budgets []budget
 	db.Table("capex_budget as cb").
-		Select("cb.budget_code as code, b.budget_amount as amount, cb.amount as capex_amount, b.remaining as available, b.budget_desc as desc").
+		Select("cb.budget_code as code, b.budget_amount as amount, cb.amount as capex_amount, b.remaining as available, b.budget_desc as descr").
 		Joins("JOIN tb_budget as b on cb.budget_code = b.budget_code").
-		Where("cb.capex_id", capexTrx.ID).
+		Where("cb.capex_id = ?", capexTrx.ID).
 		Find(&budgets)
 
-	var funcMap = template.FuncMap{
-		"separator": func(val int64) string {
-			return humanize.FormatInteger("#.###,", int(val))
-		},
+	// var funcMap = template.FuncMap{
+	// 	"separator": func(val int64) string {
+	// 		return humanize.FormatInteger("#.###,", int(val))
+	// 	},
+	// }
+
+	for idx, budget := range budgets {
+		budgets[idx].AmountText = humanize.FormatInteger("#.###,", int(budget.Amount))
+		budgets[idx].CapexAmountText = humanize.FormatInteger("#.###,", int(budget.CapexAmount))
+		budgets[idx].AvailableText = humanize.FormatInteger("#.###,", int(budget.Available))
 	}
 
 	notification.SendEmail(to, subject, "approval.html", struct {
@@ -1359,7 +1555,7 @@ func notifApprover(trxID uint, approver string, sender string) {
 		// BudgetAvailable: humanize.FormatInteger("#.###,", int(budget.Remaining)),
 		// BudgetDesc:      budget.BudgetDesc,
 		Domain: os.Getenv("domain"),
-	}, funcMap)
+	}, map[string]interface{}{})
 
 }
 
@@ -1457,6 +1653,7 @@ func exportToCSV(trx CapexTrx) error {
 			"Activity Type",
 			"Asset Group",
 			"Asset Generation Mode",
+			"Asset Class",
 		},
 	}
 
@@ -1470,6 +1667,7 @@ func exportToCSV(trx CapexTrx) error {
 		trx.AssetActivityType,
 		trx.AssetGroup,
 		trx.AssetGenMode,
+		trx.AssetClass,
 	}
 	contents = append(contents, content)
 

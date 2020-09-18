@@ -29,10 +29,10 @@
 				<tbody>
 					{{range .Budgets}}
 					<tr>
-						<td>{{.Code}} | {{.Desc}}</td>
-						<td style="text-align: right">{{separator .Amount}}</td>
-						<td style="text-align: right">{{separator .CapexAmount}}</td>
-						<td style="text-align: right">{{separator .Available}}</td>
+						<td>{{.Code}} | {{.Descr}}</td>
+						<td style="text-align: right">{{.AmountText}}</td>
+						<td style="text-align: right">{{.CapexAmountText}}</td>
+						<td style="text-align: right">{{.AvailableText}}</td>
 					</tr>
 					{{end}}
 				</tbody>

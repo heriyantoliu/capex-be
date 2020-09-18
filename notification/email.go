@@ -22,7 +22,6 @@ func SendEmail(to []string, subject string, templateHTML string, bodyVar interfa
 
 	const headers string = "MIME-version: 1.0;\nContent-Type: text/html;"
 
-	gmailAuth := smtp.PlainAuth("", mailServerUsername, mailServerPassword, "smtp-relay.gmail.com")
 	t, err := template.ParseFiles("./notification/template/" + templateHTML)
 	if err != nil {
 		log.Println(err.Error())
@@ -31,6 +30,8 @@ func SendEmail(to []string, subject string, templateHTML string, bodyVar interfa
 	t.Funcs(funcMap)
 
 	var body bytes.Buffer
+
+	gmailAuth := smtp.PlainAuth("", mailServerUsername, mailServerPassword, "smtp-relay.gmail.com")
 
 	body.Write([]byte(fmt.Sprintf("From: %s\nSubject: %s\n%s\n\n", sender, subject, headers)))
 
