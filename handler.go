@@ -699,7 +699,10 @@ func updateCapexTrx(c *gin.Context) {
 		AssetActivityType string        `json:"assetActivityType"`
 		AssetGroup        string        `json:"assetGroup"`
 		AssetGenMode      string        `json:"assetGenMode"`
+		AssetNote         string        `json:"assetNote"`
 		Status            string        `json:"status"`
+		ForeignAmount     uint64        `json:"foreignAmount"`
+		ForeignCurrency   string        `json:"foreignCurrency"`
 		Budget            []CapexBudget `json:"budgetCode"`
 	}{}
 
@@ -741,6 +744,8 @@ func updateCapexTrx(c *gin.Context) {
 		capexTrx.Plant = resBody.Plant
 		capexTrx.StorageLocation = resBody.StorageLocation
 		capexTrx.AssetActivityType = resBody.AssetActivityType
+		capexTrx.ForeignAmount = resBody.ForeignAmount
+		capexTrx.ForeignCurrency = resBody.ForeignCurrency
 
 		capexTrx.Status = resBody.Status
 
@@ -891,6 +896,7 @@ func updateCapexTrx(c *gin.Context) {
 		capexTrx.ACCApproved = "X"
 		capexTrx.Status = "I"
 		capexTrx.Justification = resBody.Justification
+		capexTrx.AssetNote = resBody.AssetNote
 
 		var approval []Approval
 		err = db.Where("cost_center = ? and asset_class = ? and amount_low <= ? and amount_high >= ?",
@@ -924,6 +930,7 @@ func updateCapexTrx(c *gin.Context) {
 			Status:            "I",
 			NextApproval:      capexTrx.NextApproval,
 			Justification:     capexTrx.Justification,
+			AssetNote:         capexTrx.AssetNote,
 		}).Error
 		// err = tx.Save(&capexTrx).Error
 		if err != nil {
@@ -1458,6 +1465,10 @@ func createAttachment(c *gin.Context) {
 	}
 
 	files := form.File["files"]
+
+	if len(files) == 0 {
+		return
+	}
 	path := "./public/attachment/" + capexID + "/"
 
 	_, err = os.Stat(path)
