@@ -21,7 +21,7 @@ type CapexTrx struct {
 	Justification     string `json:"justification"`
 	UnitPrice         uint64 `json:"unitPrice"`
 	TotalAmount       uint64 `json:"totalAmount"`
-	TotalBudget       uint64 `json:"totalBudget"`
+	TotalBudget       int64  `json:"totalBudget"`
 	ForeignAmount     uint64 `json:"foreignAmount"`
 	ForeignCurrency   string `json:"foreignCurrency"`
 	Plant             string `json:"plant"`
@@ -74,6 +74,7 @@ type CapexBudget struct {
 	BudgetCode string `gorm:"primary_key" json:"budgetCode"`
 	CostCenter string `json:"costCenter"`
 	Amount     uint64 `json:"amount"`
+	Remaining  int64  `json:"remaining"`
 }
 type CapexAttachment struct {
 	CapexID   uint64 `gorm:"primary_key;auto_increment:false" json:"capexId"`

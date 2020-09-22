@@ -467,46 +467,89 @@ func createCapexTrx(c *gin.Context) {
 		BudgetCode string
 		Remaining  int64
 	}{}
-	if capexTrx.BudgetType == "B" {
-		for _, budget := range capexBudget {
 
-			err = db.Table("tb_budget").
-				Select("budget_code, remaining").
-				Where("budget_code = ?", budget.BudgetCode).
-				First(&tbBudget).
-				Error
+	if capexTrx.Status == "ACC" {
+
+		if capexTrx.BudgetType == "B" {
+			for idx, budget := range capexBudget {
+
+				err = db.Table("tb_budget").
+					Select("budget_code, remaining").
+					Where("budget_code = ?", budget.BudgetCode).
+					First(&tbBudget).
+					Error
+				if err != nil {
+					c.AbortWithError(http.StatusNotFound, errors.New("budget code tidak valid"))
+					c.JSON(http.StatusNotFound, gin.H{
+						"message": "budget code tidak valid",
+					})
+					return
+				}
+				capexBudget[idx].Remaining = tbBudget.Remaining
+				capexTrx.TotalBudget += tbBudget.Remaining
+				tbBudget.Remaining -= int64(budget.Amount)
+				tbBudgets = append(tbBudgets, tbBudget)
+			}
+
+		}
+
+		tx := db.Begin()
+		err = tx.Create(&capexTrx).Error
+		if err != nil {
+			tx.Rollback()
+			c.AbortWithError(http.StatusInternalServerError, err)
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"message": err.Error(),
+			})
+			return
+		}
+
+		var saveCapexBudget CapexBudget
+
+		for _, budget := range capexBudget {
+			saveCapexBudget.CapexID = capexTrx.ID
+			saveCapexBudget.BudgetCode = budget.BudgetCode
+			saveCapexBudget.CostCenter = budget.CostCenter
+			saveCapexBudget.Amount = budget.Amount
+			saveCapexBudget.Remaining = budget.Remaining
+			err = tx.Create(&saveCapexBudget).Error
 			if err != nil {
-				c.AbortWithError(http.StatusNotFound, errors.New("budget code tidak valid"))
-				c.JSON(http.StatusNotFound, gin.H{
-					"message": "budget code tidak valid",
+				tx.Rollback()
+				c.AbortWithError(http.StatusInternalServerError, err)
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"message": err.Error(),
 				})
 				return
 			}
-			tbBudget.Remaining -= int64(budget.Amount)
-			tbBudgets = append(tbBudgets, tbBudget)
 		}
 
-	}
+		for _, budget := range tbBudgets {
+			err = tx.Table("tb_budget").
+				Where("budget_code = ?", budget.BudgetCode).
+				Updates(map[string]interface{}{"remaining": budget.Remaining}).Error
+			if err != nil {
+				tx.Rollback()
+				c.AbortWithError(http.StatusInternalServerError, err)
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"message": err.Error(),
+				})
+				return
+			}
+		}
 
-	tx := db.Begin()
-	err = tx.Create(&capexTrx).Error
-	if err != nil {
-		tx.Rollback()
-		c.AbortWithError(http.StatusInternalServerError, err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"message": err.Error(),
-		})
-		return
-	}
+		err = tx.Commit().Error
+		if err != nil {
+			c.AbortWithError(http.StatusInternalServerError, err)
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"message": err.Error(),
+			})
+			return
+		}
 
-	var saveCapexBudget CapexBudget
-
-	for _, budget := range capexBudget {
-		saveCapexBudget.CapexID = capexTrx.ID
-		saveCapexBudget.BudgetCode = budget.BudgetCode
-		saveCapexBudget.CostCenter = budget.CostCenter
-		saveCapexBudget.Amount = budget.Amount
-		err = tx.Create(&saveCapexBudget).Error
+		go notifAccounting(capexTrx.ID)
+	} else {
+		tx := db.Begin()
+		err = tx.Create(&capexTrx).Error
 		if err != nil {
 			tx.Rollback()
 			c.AbortWithError(http.StatusInternalServerError, err)
@@ -515,14 +558,27 @@ func createCapexTrx(c *gin.Context) {
 			})
 			return
 		}
-	}
 
-	for _, budget := range tbBudgets {
-		err = tx.Table("tb_budget").
-			Where("budget_code = ?", budget.BudgetCode).
-			Updates(map[string]interface{}{"remaining": budget.Remaining}).Error
+		var saveCapexBudget CapexBudget
+
+		for _, budget := range capexBudget {
+			saveCapexBudget.CapexID = capexTrx.ID
+			saveCapexBudget.BudgetCode = budget.BudgetCode
+			saveCapexBudget.CostCenter = budget.CostCenter
+			saveCapexBudget.Amount = budget.Amount
+			err = tx.Create(&saveCapexBudget).Error
+			if err != nil {
+				tx.Rollback()
+				c.AbortWithError(http.StatusInternalServerError, err)
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"message": err.Error(),
+				})
+				return
+			}
+		}
+
+		err = tx.Commit().Error
 		if err != nil {
-			tx.Rollback()
 			c.AbortWithError(http.StatusInternalServerError, err)
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"message": err.Error(),
@@ -530,17 +586,6 @@ func createCapexTrx(c *gin.Context) {
 			return
 		}
 	}
-
-	err = tx.Commit().Error
-	if err != nil {
-		c.AbortWithError(http.StatusInternalServerError, err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"message": err.Error(),
-		})
-		return
-	}
-
-	go notifAccounting(capexTrx.ID)
 
 	c.JSON(200, capexTrx)
 	return
@@ -647,12 +692,14 @@ func updateCapexTrx(c *gin.Context) {
 		Justification     string        `json:"justification"`
 		UnitPrice         uint64        `json:"unitPrice"`
 		TotalAmount       uint64        `json:"totalAmount"`
+		TotalBudget       int64         `json:"totalBudget"`
 		Plant             string        `json:"plant"`
 		StorageLocation   string        `json:"storageLocation"`
 		AssetClass        string        `json:"assetClass"`
 		AssetActivityType string        `json:"assetActivityType"`
 		AssetGroup        string        `json:"assetGroup"`
 		AssetGenMode      string        `json:"assetGenMode"`
+		Status            string        `json:"status"`
 		Budget            []CapexBudget `json:"budgetCode"`
 	}{}
 
@@ -672,7 +719,7 @@ func updateCapexTrx(c *gin.Context) {
 
 		// var capexBudget []CapexBudget
 
-		if capexTrx.Status != "" {
+		if capexTrx.Status != "D" {
 			c.AbortWithError(http.StatusBadRequest, errors.New("Not allowed to change capex"))
 			c.JSON(http.StatusNotFound, gin.H{
 				"message": "Not allowed to change capex",
@@ -694,8 +741,10 @@ func updateCapexTrx(c *gin.Context) {
 		capexTrx.Plant = resBody.Plant
 		capexTrx.StorageLocation = resBody.StorageLocation
 		capexTrx.AssetActivityType = resBody.AssetActivityType
+
+		capexTrx.Status = resBody.Status
+
 		capexBudget := resBody.Budget
-		log.Println(capexBudget)
 
 		tbBudget := struct {
 			BudgetCode string
@@ -706,40 +755,39 @@ func updateCapexTrx(c *gin.Context) {
 			Remaining  int64
 		}{}
 
-		var currentBudget CapexBudget
-		var currentBudgets []CapexBudget
 		if capexTrx.BudgetType == "B" {
 
-			db.Where("capex_id = ?", capexTrx.ID).Find(&currentBudgets)
+			if capexTrx.Status == "ACC" {
+				// db.Where("capex_id = ?", capexTrx.ID).Find(&currentBudgets)
 
-			for _, budget := range currentBudgets {
-				db.Table("tb_budget").
-					Select("budget_code, remaining").
-					Where("budget_code = ?", budget.BudgetCode).
-					First(&tbBudget)
-				tbBudget.Remaining += int64(budget.Amount)
-				tbBudgets = append(tbBudgets, tbBudget)
-			}
+				// for _, budget := range currentBudgets {
+				// 	db.Table("tb_budget").
+				// 		Select("budget_code, remaining").
+				// 		Where("budget_code = ?", budget.BudgetCode).
+				// 		First(&tbBudget)
+				// 	tbBudget.Remaining += int64(budget.Amount)
+				// 	tbBudgets = append(tbBudgets, tbBudget)
+				// }
 
-			for _, budget := range capexBudget {
+				for idx, budget := range capexBudget {
 
-				for _, currentBudget = range currentBudgets {
-					if currentBudget.BudgetCode == budget.BudgetCode {
-						return
-					}
-				}
+					// for _, currentBudget = range currentBudgets {
+					// 	if currentBudget.BudgetCode == budget.BudgetCode {
+					// 		return
+					// 	}
+					// }
 
-				if currentBudget.BudgetCode == budget.BudgetCode {
-					var idx int
-					for idx, tbBudget = range tbBudgets {
-						if tbBudget.BudgetCode == budget.BudgetCode {
-							return
-						}
-					}
+					// if currentBudget.BudgetCode == budget.BudgetCode {
+					// 	var idx int
+					// 	for idx, tbBudget = range tbBudgets {
+					// 		if tbBudget.BudgetCode == budget.BudgetCode {
+					// 			return
+					// 		}
+					// 	}
 
-					tbBudgets[idx].Remaining -= int64(budget.Amount)
+					// 	tbBudgets[idx].Remaining -= int64(budget.Amount)
 
-				} else {
+					// } else {
 					err = db.Table("tb_budget").
 						Select("budget_code, remaining").
 						Where("budget_code = ?", budget.BudgetCode).
@@ -752,36 +800,16 @@ func updateCapexTrx(c *gin.Context) {
 						return
 					}
 
+					capexBudget[idx].Remaining = tbBudget.Remaining
+					capexTrx.TotalBudget += tbBudget.Remaining
 					tbBudget.Remaining -= int64(budget.Amount)
 					tbBudgets = append(tbBudgets, tbBudget)
 				}
 
-				// err = db.Table("tb_budget").
-				// 	Select("budget_code, remaining").
-				// 	Where("budget_code = ?", budget.BudgetCode).
-				// 	First(&tbBudget).
-				// 	Error
-				// if err != nil {
-				// 	c.AbortWithError(http.StatusNotFound, errors.New("budget code tidak valid"))
-				// 	c.JSON(http.StatusNotFound, gin.H{
-				// 		"message": "budget code tidak valid",
-				// 	})
-				// 	return
 				// }
-
-				// err = db.Where("capex_id = ? AND budget_code = ?", capexTrx.ID, budget.BudgetCode).First(&currentBudget).Error
-				// if err != nil {
-				// 	tbBudget.Remaining -= int64(budget.Amount)
-				// } else {
-				// 	tbBudget.Remaining = tbBudget.Remaining + int64(currentBudget.Amount) - int64(budget.Amount)
-				// }
-				// tbBudgets = append(tbBudgets, tbBudget)
 			}
 
 		}
-
-		log.Println(capexBudget)
-		log.Println(tbBudgets)
 
 		tx := db.Begin()
 		err := tx.Save(&capexTrx).Error
@@ -810,6 +838,7 @@ func updateCapexTrx(c *gin.Context) {
 			saveCapexBudget.BudgetCode = budget.BudgetCode
 			saveCapexBudget.CostCenter = budget.CostCenter
 			saveCapexBudget.Amount = budget.Amount
+			saveCapexBudget.Remaining = budget.Remaining
 			err = tx.Create(&saveCapexBudget).Error
 			if err != nil {
 				tx.Rollback()
@@ -821,18 +850,21 @@ func updateCapexTrx(c *gin.Context) {
 			}
 		}
 
-		for _, budget := range tbBudgets {
-			err = tx.Table("tb_budget").
-				Where("budget_code = ?", budget.BudgetCode).
-				Updates(map[string]interface{}{"remaining": budget.Remaining}).Error
-			if err != nil {
-				tx.Rollback()
-				c.AbortWithError(http.StatusInternalServerError, err)
-				c.JSON(http.StatusInternalServerError, gin.H{
-					"message": err.Error(),
-				})
-				return
+		if capexTrx.Status == "ACC" {
+			for _, budget := range tbBudgets {
+				err = tx.Table("tb_budget").
+					Where("budget_code = ?", budget.BudgetCode).
+					Updates(map[string]interface{}{"remaining": budget.Remaining}).Error
+				if err != nil {
+					tx.Rollback()
+					c.AbortWithError(http.StatusInternalServerError, err)
+					c.JSON(http.StatusInternalServerError, gin.H{
+						"message": err.Error(),
+					})
+					return
+				}
 			}
+
 		}
 
 		err = tx.Commit().Error
@@ -842,6 +874,10 @@ func updateCapexTrx(c *gin.Context) {
 				"message": err.Error(),
 			})
 			return
+		}
+
+		if capexTrx.Status == "ACC" {
+			go notifAccounting(capexTrx.ID)
 		}
 		c.JSON(200, capexTrx)
 		return
