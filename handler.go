@@ -596,6 +596,14 @@ func createCapexAsset(c *gin.Context) {
 	var capexAsset CapexAsset
 	c.BindJSON(&capexAsset)
 
+	if capexAsset.AssetNo == "" {
+		c.AbortWithError(http.StatusBadRequest, errors.New("Asset no is empty"))
+		c.JSON(http.StatusBadRequest, gin.H{
+			"message": "Asset no is empty",
+		})
+		return
+	}
+
 	capexID := c.Param("id")
 
 	var capexTrx CapexTrx
