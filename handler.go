@@ -652,6 +652,8 @@ func createCapexAsset(c *gin.Context) {
 		return
 	}
 
+	go notifAsset(capexTrx.ID)
+
 	c.JSON(http.StatusOK, capexTrx)
 	return
 
@@ -1746,7 +1748,7 @@ func notifApprover(trxID uint, approver string, sender string) {
 		budgets[idx].AvailableText = humanize.FormatInteger("#.###,", int(budget.Available))
 	}
 
-	notification.SendEmail(to, subject, "approval.html", struct {
+	notification.SendEmail(to, nil, subject, "approval.html", struct {
 		CapexID string
 		Sender  string
 		Budgets []budget
@@ -1768,18 +1770,32 @@ func notifApprover(trxID uint, approver string, sender string) {
 func notifAsset(trxID uint) {
 	to := []string{}
 	subject := "Asset Number for Capex id " + strconv.Itoa(int(trxID))
-	// cc := []string{"herman.susilo@sidomuncul.co.id"}
+	cc := []string{"heriyanto.liu@sidomuncul.co.id"}
 
 	result := struct {
 		Email string
-	}
+	}{}
 
-	var capexAsset CapexAsset
+	db.Debug().Table("capex_trx as c").
+		Select("u.email").
+		Joins("JOIN user as u on c.created_by = u.username").
+		Where("c.id = ?", trxID).
+		First(&result)
+
+	to = append(to, result.Email)
+
+	var capexAsset []CapexAsset
 	db.Where("capex_id = ?", trxID).Find(&capexAsset)
 
-
-
-	notification.SendEmail(to, subject, "asset.html")
+	notification.SendEmail(to, cc, subject, "asset.html", struct {
+		Asset   []CapexAsset
+		CapexID string
+		Domain  string
+	}{
+		Asset:   capexAsset,
+		CapexID: strconv.Itoa(int(trxID)),
+		Domain:  os.Getenv("domain"),
+	}, map[string]interface{}{})
 }
 
 func notifAccounting(trxID uint) {
@@ -1795,7 +1811,7 @@ func notifAccounting(trxID uint) {
 		to = append(to, user.Email)
 	}
 
-	notification.SendEmail(to, subject, "accounting-appr.html", struct {
+	notification.SendEmail(to, nil, subject, "accounting-appr.html", struct {
 		Name    string
 		CapexID string
 		Domain  string
@@ -1803,7 +1819,7 @@ func notifAccounting(trxID uint) {
 		Name:    "Accounting Team",
 		CapexID: strconv.Itoa(int(trxID)),
 		Domain:  os.Getenv("domain"),
-	}, map[string]interface{}{})
+	}, nil)
 }
 
 func notifReject(trxID uint, message string) {
@@ -1822,7 +1838,7 @@ func notifReject(trxID uint, message string) {
 	to := []string{user.Email}
 	subject := "Reject Capex " + strconv.Itoa(int(trxID))
 
-	notification.SendEmail(to, subject, "reject-capex.html", struct {
+	notification.SendEmail(to, nil, subject, "reject-capex.html", struct {
 		Name    string
 		CapexID string
 		Message string
@@ -1832,7 +1848,7 @@ func notifReject(trxID uint, message string) {
 		CapexID: strconv.Itoa(int(trxID)),
 		Message: message,
 		Domain:  os.Getenv("domain"),
-	}, map[string]interface{}{})
+	}, nil)
 
 }
 
@@ -1852,7 +1868,7 @@ func notifFullApprove(trxID uint) {
 	to := []string{user.Email}
 	subject := "Capex " + strconv.Itoa(int(trxID)) + " Full Approved"
 
-	notification.SendEmail(to, subject, "full-approve.html", struct {
+	notification.SendEmail(to, nil, subject, "full-approve.html", struct {
 		Name    string
 		CapexID string
 		Domain  string
@@ -1860,7 +1876,7 @@ func notifFullApprove(trxID uint) {
 		Name:    user.Name,
 		CapexID: strconv.Itoa(int(trxID)),
 		Domain:  os.Getenv("domain"),
-	}, map[string]interface{}{})
+	}, nil)
 
 }
 

@@ -10,7 +10,7 @@ import (
 )
 
 // SendEmail ... Function to send email
-func SendEmail(to []string, subject string, templateHTML string, bodyVar interface{}, funcMap map[string]interface{}) {
+func SendEmail(to []string, cc []string, subject string, templateHTML string, bodyVar interface{}, funcMap map[string]interface{}) {
 
 	var smtpUser string = os.Getenv("SMTPUser")
 	var smtpPass string = os.Getenv("SMTPPassword")
@@ -35,6 +35,10 @@ func SendEmail(to []string, subject string, templateHTML string, bodyVar interfa
 
 	for _, address := range to {
 		m.SetHeader("To", address)
+	}
+
+	for _, address := range cc {
+		m.SetAddressHeader("Cc", address, "")
 	}
 
 	m.SetHeader("Subject", subject)
