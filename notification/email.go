@@ -34,11 +34,15 @@ func SendEmail(to []string, cc []string, subject string, templateHTML string, bo
 	m.SetHeader("From", smtpUser)
 
 	for _, address := range to {
-		m.SetHeader("To", address)
+		if address != "" {
+			m.SetHeader("To", address)
+		}
 	}
 
 	for _, address := range cc {
-		m.SetAddressHeader("Cc", address, "")
+		if address != "" {
+			m.SetAddressHeader("Cc", address, "")
+		}
 	}
 
 	m.SetHeader("Subject", subject)

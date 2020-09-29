@@ -1775,7 +1775,7 @@ func notifAsset(trxID uint) {
 		Email string
 	}{}
 
-	db.Debug().Table("capex_trx as c").
+	db.Table("capex_trx as c").
 		Select("u.email").
 		Joins("JOIN user as u on c.created_by = u.username").
 		Where("c.id = ?", trxID).
