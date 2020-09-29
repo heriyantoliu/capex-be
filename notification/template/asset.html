@@ -1,0 +1,19 @@
+<html>
+	<head>
+		<title>Capex</title>
+	</head>
+	<body>
+		<div>
+			Capex id ...was full approve <br />
+			Here is the asset number for cretae Purchase Requisition <br />
+			{{range .Asset}}
+			<div>- {{.AssetNo}}</div>
+			{{end}}
+			<br />
+			For more detail, please click below link <br />
+			<a href="{{.Domain}}/capex/{{.CapexID}}"
+				>{{.Domain}}/capex/{{.CapexID}}</a
+			>
+		</div>
+	</body>
+</html>

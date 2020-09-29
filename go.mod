@@ -15,4 +15,5 @@ require (
 	github.com/joho/godotenv v1.3.0
 	github.com/secsy/goftp v0.0.0-20200609142545-aa2de14babf4
 	golang.org/x/crypto v0.0.0-20190325154230-a5d413f7728c
+	gopkg.in/gomail.v2 v2.0.0-20160411212932-81ebce5c23df
 )

@@ -593,10 +593,10 @@ func createCapexTrx(c *gin.Context) {
 
 func createCapexAsset(c *gin.Context) {
 
-	var capexAsset CapexAsset
+	var capexAsset []CapexAsset
 	c.BindJSON(&capexAsset)
 
-	if capexAsset.AssetNo == "" {
+	if len(capexAsset) == 0 {
 		c.AbortWithError(http.StatusBadRequest, errors.New("Asset no is empty"))
 		c.JSON(http.StatusBadRequest, gin.H{
 			"message": "Asset no is empty",
@@ -619,17 +619,18 @@ func createCapexAsset(c *gin.Context) {
 
 	capexIDUint, _ := strconv.ParseUint(capexID, 10, 0)
 
-	capexAsset.CapexID = uint(capexIDUint)
-
 	tx := db.Begin()
-	err = tx.Create(&capexAsset).Error
-	if err != nil {
-		tx.Rollback()
-		c.AbortWithError(http.StatusInternalServerError, err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"message": err.Error(),
-		})
-		return
+	for _, asset := range capexAsset {
+		asset.CapexID = uint(capexIDUint)
+		err = tx.Create(&asset).Error
+		if err != nil {
+			tx.Rollback()
+			c.AbortWithError(http.StatusInternalServerError, err)
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"message": err.Error(),
+			})
+			return
+		}
 	}
 
 	err = tx.Model(&capexTrx).Update("Status", "SAP").Error
@@ -1764,11 +1765,28 @@ func notifApprover(trxID uint, approver string, sender string) {
 
 }
 
+func notifAsset(trxID uint) {
+	to := []string{}
+	subject := "Asset Number for Capex id " + strconv.Itoa(int(trxID))
+	// cc := []string{"herman.susilo@sidomuncul.co.id"}
+
+	result := struct {
+		Email string
+	}
+
+	var capexAsset CapexAsset
+	db.Where("capex_id = ?", trxID).Find(&capexAsset)
+
+
+
+	notification.SendEmail(to, subject, "asset.html")
+}
+
 func notifAccounting(trxID uint) {
 	to := []string{}
 	subject := "Capex " + strconv.Itoa(int(trxID))
 	var users []User
-	_ = db.Where("accounting = ?", "X").Find(&users).Error
+	_ = db.Where("accounting = ? AND email != ''", "X").Find(&users).Error
 	if len(users) == 0 {
 		return
 	}
