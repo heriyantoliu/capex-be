@@ -1770,7 +1770,6 @@ func notifApprover(trxID uint, approver string, sender string) {
 func notifAsset(trxID uint) {
 	to := []string{}
 	subject := "Asset Number for Capex id " + strconv.Itoa(int(trxID))
-	cc := []string{"heriyanto.liu@sidomuncul.co.id"}
 
 	result := struct {
 		Email string
@@ -1787,7 +1786,7 @@ func notifAsset(trxID uint) {
 	var capexAsset []CapexAsset
 	db.Where("capex_id = ?", trxID).Find(&capexAsset)
 
-	notification.SendEmail(to, cc, subject, "asset.html", struct {
+	notification.SendEmail(to, []string{os.Getenv("assetCC")}, subject, "asset.html", struct {
 		Asset   []CapexAsset
 		CapexID string
 		Domain  string
