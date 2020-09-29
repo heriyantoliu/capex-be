@@ -1040,12 +1040,18 @@ func approveCapex(c *gin.Context) {
 
 	capexID := c.Param("id")
 
+	resBody := struct {
+		Justification string `json:"justification"`
+	}{}
+
 	// approveBody := struct {
 	// 	CapexID uint `json:"capexID"`
 	// 	Seq     uint `json:"seq"`
 	// }{}
 
-	// c.BindJSON(&approveBody)
+	err = c.ShouldBind(&resBody)
+
+	log.Println(resBody.Justification)
 
 	var capexTrx CapexTrx
 	err = db.Where("id = ?", capexID).First(&capexTrx).Error
@@ -1063,6 +1069,10 @@ func approveCapex(c *gin.Context) {
 			"message": "Invalid approver",
 		})
 		return
+	}
+
+	if resBody.Justification == "" {
+		resBody.Justification = capexTrx.Justification
 	}
 
 	switch capexTrx.Status {
@@ -1157,7 +1167,7 @@ func approveCapex(c *gin.Context) {
 		for _, appr := range capexAppr {
 			if appr.Status == "" {
 				stillNeedApproval = true
-				err = tx.Model(&capexTrx).Update("next_approval", appr.Approver).Error
+				err = tx.Model(&capexTrx).Updates(map[string]interface{}{"next_approval": appr.Approver, "justification": resBody.Justification}).Error
 				if err != nil {
 					errorFound = true
 					// tx.Rollback()
@@ -1176,7 +1186,7 @@ func approveCapex(c *gin.Context) {
 
 	if !errorFound {
 		if !stillNeedApproval {
-			err = tx.Model(&capexTrx).Updates(map[string]interface{}{"status": "A", "next_approval": 0}).Error
+			err = tx.Model(&capexTrx).Updates(map[string]interface{}{"status": "A", "next_approval": 0, "justification": resBody.Justification}).Error
 			if err != nil {
 				errorFound = true
 				// tx.Rollback()
