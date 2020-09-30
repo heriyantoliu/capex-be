@@ -1786,7 +1786,7 @@ func notifAsset(trxID uint) {
 	var capexAsset []CapexAsset
 	db.Where("capex_id = ?", trxID).Find(&capexAsset)
 
-	notification.SendEmail(to, []string{os.Getenv("assetCC")}, subject, "asset.html", struct {
+	notification.SendEmail(to, []string{os.Getenv("assetACC")}, subject, "asset.html", struct {
 		Asset   []CapexAsset
 		CapexID string
 		Domain  string
@@ -1853,26 +1853,24 @@ func notifReject(trxID uint, message string) {
 
 func notifFullApprove(trxID uint) {
 
-	user := struct {
-		Email string
-		Name  string
-	}{}
-	_ = db.Table("capex_trx as c").
-		Select("u.email, u.name").
-		Joins("JOIN user as u on c.created_by = u.username").
-		Where("c.id = ?", trxID).
-		Find(&user).
-		Error
+	// user := struct {
+	// 	Email string
+	// 	Name  string
+	// }{}
+	// _ = db.Table("capex_trx as c").
+	// 	Select("u.email, u.name").
+	// 	Joins("JOIN user as u on c.created_by = u.username").
+	// 	Where("c.id = ?", trxID).
+	// 	Find(&user).
+	// 	Error
 
-	to := []string{user.Email}
-	subject := "Capex " + strconv.Itoa(int(trxID)) + " Full Approved"
+	// to := []string{user.Email}
+	subject := "Capex id " + strconv.Itoa(int(trxID)) + " was Full Approved"
 
-	notification.SendEmail(to, nil, subject, "full-approve.html", struct {
-		Name    string
+	notification.SendEmail([]string{os.Getenv("assetACC")}, nil, subject, "full-approve.html", struct {
 		CapexID string
 		Domain  string
 	}{
-		Name:    user.Name,
 		CapexID: strconv.Itoa(int(trxID)),
 		Domain:  os.Getenv("domain"),
 	}, nil)
