@@ -1054,8 +1054,6 @@ func approveCapex(c *gin.Context) {
 
 	err = c.ShouldBind(&resBody)
 
-	log.Println(resBody.Justification)
-
 	var capexTrx CapexTrx
 	err = db.Where("id = ?", capexID).First(&capexTrx).Error
 	if err != nil || capexTrx.ID == 0 {
