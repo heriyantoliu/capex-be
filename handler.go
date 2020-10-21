@@ -39,7 +39,7 @@ func initDb() {
 
 	db.SingularTable(true)
 
-	db.AutoMigrate(&CapexTrx{}, &Plant{}, &Approval{}, &CapexAppr{}, &UserRole{}, &User{}, &CapexAsset{}, &UserCostCenterRole{}, &CostCenterRole{}, &CapexAttachment{}, &CapexBudget{})
+	db.AutoMigrate(&CapexTrx{}, &Plant{}, &Approval{}, &CapexAppr{}, &UserRole{}, &User{}, &CapexAsset{}, &UserCostCenterRole{}, &CostCenterRole{}, &CapexAttachment{}, &CapexBudget{}, &CapexMessage{})
 }
 
 func getBudget(c *gin.Context) {
@@ -1359,6 +1359,65 @@ func rejectCapex(c *gin.Context) {
 	})
 }
 
+func getCapexMessage(c *gin.Context) {
+
+	capexID := c.Param("id")
+
+	var capexMessage []CapexMessage
+
+	db.Where("capex_id = ?", capexID).Find(&capexMessage)
+
+	c.JSON(http.StatusOK, capexMessage)
+}
+
+func createCapexMessage(c *gin.Context) {
+	var capexMessage CapexMessage
+
+	c.ShouldBindJSON(&capexMessage)
+	log.Println(capexMessage)
+
+	uintID, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+
+	capexMessage.CapexID = uint(uintID)
+
+	if capexMessage.FromUsername == "" {
+		c.AbortWithError(http.StatusBadRequest, errors.New("From Username is empty"))
+		c.JSON(http.StatusBadRequest, gin.H{
+			"message": "From Username is empty",
+		})
+		return
+	}
+
+	if capexMessage.ToUsername == "" {
+		c.AbortWithError(http.StatusBadRequest, errors.New("To Username is empty"))
+		c.JSON(http.StatusBadRequest, gin.H{
+			"message": "To Username is empty",
+		})
+		return
+	}
+
+	if capexMessage.Message == "" {
+		c.AbortWithError(http.StatusBadRequest, errors.New("Message is empty"))
+		c.JSON(http.StatusBadRequest, gin.H{
+			"message": "Message is empty",
+		})
+		return
+	}
+
+	err := db.Save(&capexMessage).Error
+	if err != nil {
+		c.AbortWithError(http.StatusBadRequest, errors.New(err.Error()))
+		c.JSON(http.StatusBadRequest, gin.H{
+			"message": err.Error(),
+		})
+		return
+	}
+
+	go notifMessage(capexMessage.CapexID, capexMessage.FromUsername, capexMessage.ToUsername, capexMessage.Message)
+
+	c.JSON(http.StatusCreated, capexMessage)
+}
+
 func updateUser(c *gin.Context) {
 	id := c.MustGet("ID").(float64)
 	if id == 0 {
@@ -1451,6 +1510,18 @@ func getUser(c *gin.Context) {
 
 	c.JSON(http.StatusOK, &user)
 	return
+}
+
+func getAllUser(c *gin.Context) {
+
+	user := []struct {
+		Username string `json:"username"`
+		Name     string `json:"name"`
+	}{}
+
+	db.Table("user").Select("username, name").Where("username <> ''").Find(&user)
+
+	c.JSON(http.StatusOK, user)
 }
 
 func createUser(c *gin.Context) {
@@ -1793,6 +1864,28 @@ func notifAsset(trxID uint) {
 		CapexID: strconv.Itoa(int(trxID)),
 		Domain:  os.Getenv("domain"),
 	}, map[string]interface{}{})
+}
+
+func notifMessage(trxID uint, fromUsername string, toUsername string, message string) {
+	to := []string{}
+	subject := "Message Capex " + strconv.Itoa(int(trxID))
+
+	var userTo, userFrom User
+	db.Where("username = ?", toUsername).First(&userTo)
+	db.Where("username = ?", fromUsername).First(&userFrom)
+	to = append(to, userTo.Email)
+
+	notification.SendEmail(to, nil, subject, "new-message.html", struct {
+		CapexID string
+		Sender  string
+		Message string
+		Domain  string
+	}{
+		CapexID: strconv.Itoa(int(trxID)),
+		Sender:  userFrom.Name,
+		Message: message,
+		Domain:  os.Getenv("domain"),
+	}, nil)
 }
 
 func notifAccounting(trxID uint) {

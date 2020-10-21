@@ -82,6 +82,14 @@ type CapexAttachment struct {
 	CreatedAt time.Time
 }
 
+type CapexMessage struct {
+	gorm.Model
+	CapexID      uint   `json:"capexId"`
+	FromUsername string `json:"fromUsername"`
+	ToUsername   string `json:"toUsername"`
+	Message      string `json:"message"`
+}
+
 type Plant struct {
 	gorm.Model
 	PlantCode string `json:"plantCode"`

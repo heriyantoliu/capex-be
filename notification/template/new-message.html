@@ -1,0 +1,19 @@
+<html>
+	<head>
+		<title>Capex Message</title>
+		
+	</head>
+	<body>
+		<div>
+      Anda mendapatkan pesan baru dari bapak/ibu {{.Sender}} untuk capex {{.CapexID}} <br />
+      Pesan: <br />
+      <div style="white-space: pre-line">{{.Message}}</div>
+
+			<br />
+			Silahkan klik link di bawah ini untuk informasi lebih lanjut: <br />
+			<a href="{{.Domain}}/capex/{{.CapexID}}"
+				>{{.Domain}}/capex/{{.CapexID}}</a
+			>
+		</div>
+	</body>
+</html>
