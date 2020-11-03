@@ -99,6 +99,7 @@ func main() {
 	r.POST("/capexTrx", createCapexTrx)
 	r.GET("/capexTrx/:id", getCapexTrxDetail)
 	r.PUT("/capexTrx/:id", updateCapexTrx)
+	r.PUT("/capexTrx/:id/justification", updateCapexTrxJustification)
 	r.GET("/capexTrx/:id/attachment/:filename", getAttachment)
 	r.POST("/capexTrx/:id/attachment", createAttachment)
 	r.DELETE("/capexTrx/:id/attachment/:filename", deleteAttachment)

@@ -683,6 +683,25 @@ func getCapexAsset(c *gin.Context) {
 
 }
 
+func updateCapexTrxJustification(c *gin.Context) {
+	var resBody = struct {
+		Justification string `json:"justification"`
+	}{}
+
+	capexID := c.Param("id")
+
+	c.BindJSON(&resBody)
+
+	var capexTrx CapexTrx
+
+	capexTrx.Justification = resBody.Justification
+
+	db.Model(&capexTrx).Where("id = ?", capexID).Update("justification", capexTrx.Justification)
+
+	c.JSON(http.StatusOK, nil)
+	return
+}
+
 func updateCapexTrx(c *gin.Context) {
 	username, err := validateUsername(c)
 	if err != nil {
