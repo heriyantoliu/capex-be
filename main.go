@@ -114,6 +114,7 @@ func main() {
 	r.GET("/user/:id", getUser)
 	r.PUT("/user/:id", updateUser)
 	r.GET("/budget", getBudget)
+	r.GET("/report/capex-trx", getCapexTrxReport)
 	r.GET("/createInfo", getCreateInfo)
 
 	r.Run(":" + portApp)

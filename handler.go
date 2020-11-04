@@ -257,6 +257,59 @@ func getRoles(c *gin.Context) {
 	return
 }
 
+func getCapexTrxReport(c *gin.Context) {
+	username := c.MustGet("USERNAME").(string)
+	if username == "" {
+		c.AbortWithError(http.StatusNotFound, errors.New("Username unknown"))
+		c.JSON(http.StatusNotFound, gin.H{
+			"message": "Username unknown",
+		})
+		return
+	}
+
+	costCenter := []struct {
+		CostCenter string
+	}{}
+
+	db.Table("cost_center_role as cr").
+		Select("cr.cost_center").
+		Joins("JOIN user_cost_center_role as ucr on cr.role = ucr.role").
+		Where("username = ?", username).
+		Find(&costCenter)
+
+	filterCC := []string{}
+
+	for _, cc := range costCenter {
+		filterCC = append(filterCC, cc.CostCenter)
+	}
+
+	var capexTrxAll = []struct {
+		ID          string `json:"id"`
+		CostCenter  string `json:"costCenter"`
+		Description string `json:"description"`
+		Quantity    int    `json:"quantity"`
+		Status      string `json:"status"`
+		BudgetCode  string `json:"budgetCode"`
+		Amount      int    `json:"amount"`
+		BudgetDesc  string `json:"budgetDesc"`
+		BudgetType  string `json:"budgetType"`
+	}{}
+
+	err := db.Table("capex_trx as ct").
+		Select("ct.id, ct.cost_center, ct.description, ct.quantity, ct.status, cb.budget_code, cb.amount, tb.budget_desc, ct.budget_type").
+		Joins("LEFT JOIN capex.capex_budget as cb on ct.id = cb.capex_id").
+		Joins("LEFT JOIN capex.tb_budget as tb on cb.budget_code = tb.budget_code").
+		Where("ct.cost_center IN (?)", filterCC).
+		Find(&capexTrxAll).
+		Error
+	if err != nil || len(capexTrxAll) <= 0 {
+		c.AbortWithStatus(404)
+		fmt.Println(err)
+	} else {
+		c.JSON(200, capexTrxAll)
+	}
+}
+
 func getCapexTrx(c *gin.Context) {
 	var err error
 
