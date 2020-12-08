@@ -70,11 +70,12 @@ type CapexAsset struct {
 }
 
 type CapexBudget struct {
-	CapexID    uint   `gorm:"primary_key:auto_increment:false" json:"capexID"`
-	BudgetCode string `gorm:"primary_key" json:"budgetCode"`
-	CostCenter string `json:"costCenter"`
-	Amount     uint64 `json:"amount"`
-	Remaining  int64  `json:"remaining"`
+	CapexID      uint   `gorm:"primary_key:auto_increment:false" json:"capexID"`
+	BudgetCode   string `gorm:"primary_key" json:"budgetCode"`
+	CostCenter   string `json:"costCenter"`
+	Amount       uint64 `json:"amount"`
+	Remaining    int64  `json:"remaining"`
+	ActualAmount uint64 `json:"actualAmount"`
 }
 type CapexAttachment struct {
 	CapexID   uint64 `gorm:"primary_key;auto_increment:false" json:"capexId"`

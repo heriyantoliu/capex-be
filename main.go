@@ -90,6 +90,7 @@ func main() {
 		return
 	})
 	r.POST("/capexTrx/:id/asset", createCapexAsset)
+	r.PUT("/capexTrx/:id/actual", updateCapexActual)
 	r.POST("/login", login)
 	r.POST("/user", createUser)
 

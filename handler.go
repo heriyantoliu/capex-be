@@ -1063,6 +1063,53 @@ func updateCapexTrx(c *gin.Context) {
 	return
 }
 
+func updateCapexActual(c *gin.Context) {
+	ID := c.Param("id")
+
+	var capexBudgets []CapexBudget
+	err := db.Where("capex_id = ?", ID).Find(&capexBudgets).Error
+	if err != nil {
+		c.AbortWithError(http.StatusNotFound, errors.New("Invalid Capex ID"))
+		c.JSON(http.StatusNotFound, gin.H{
+			"message": "Invalid Capex ID",
+		})
+		return
+	}
+
+	resBody := struct {
+		ActualAmount uint64 `json:"actualAmount"`
+	}{}
+
+	c.BindJSON(&resBody)
+
+	var lenBudget = len(capexBudgets)
+
+	var totalBudgetAmount uint64 = 0
+
+	for _, budgets := range capexBudgets {
+		totalBudgetAmount += budgets.Amount
+	}
+
+	var totalActual uint64 = 0
+	for i, budgets := range capexBudgets {
+		if i == lenBudget-1 {
+			capexBudgets[i].ActualAmount = resBody.ActualAmount - totalActual
+		} else {
+			percentage := float32(budgets.Amount) / float32(totalBudgetAmount)
+			capexBudgets[i].ActualAmount = uint64(percentage * float32(resBody.ActualAmount))
+			totalActual += capexBudgets[i].ActualAmount
+		}
+
+		db.Model(&capexBudgets[i]).Update("actual_amount", capexBudgets[i].ActualAmount)
+
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "success",
+	})
+	return
+}
+
 func replicateCapex(c *gin.Context) {
 
 	_, err := validateUsername(c)
