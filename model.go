@@ -22,6 +22,7 @@ type CapexTrx struct {
 	UnitPrice         uint64 `json:"unitPrice"`
 	TotalAmount       uint64 `json:"totalAmount"`
 	TotalBudget       int64  `json:"totalBudget"`
+	ActualAmount      uint64 `json:"actualAmount"`
 	ForeignAmount     uint64 `json:"foreignAmount"`
 	ForeignCurrency   string `json:"foreignCurrency"`
 	Plant             string `json:"plant"`

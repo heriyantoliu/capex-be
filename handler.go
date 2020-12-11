@@ -1090,6 +1090,18 @@ func updateCapexActual(c *gin.Context) {
 		totalBudgetAmount += budgets.Amount
 	}
 
+	tx := db.Begin()
+
+	err = tx.Table("capex_trx").Where("id = ?", ID).Update("actual_amount", resBody.ActualAmount).Error
+	if err != nil {
+		tx.Rollback()
+		c.AbortWithError(http.StatusInternalServerError, errors.New("Error when update"))
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": "Error when update",
+		})
+		return
+	}
+
 	var totalActual uint64 = 0
 	for i, budgets := range capexBudgets {
 		if i == lenBudget-1 {
@@ -1100,9 +1112,18 @@ func updateCapexActual(c *gin.Context) {
 			totalActual += capexBudgets[i].ActualAmount
 		}
 
-		db.Model(&capexBudgets[i]).Update("actual_amount", capexBudgets[i].ActualAmount)
-
+		err = tx.Model(&capexBudgets[i]).Update("actual_amount", capexBudgets[i].ActualAmount).Error
+		if err != nil {
+			tx.Rollback()
+			c.AbortWithError(http.StatusInternalServerError, errors.New("Error when update"))
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"message": "Error when update",
+			})
+			return
+		}
 	}
+
+	tx.Commit()
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "success",
