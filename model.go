@@ -9,6 +9,7 @@ import (
 type CapexTrx struct {
 	gorm.Model
 	RequestorPosition string `json:"requestorPosition"`
+	Year              int    `json:"year"`
 	BudgetOwner       string `json:"budgetOwner"`
 	CostCenter        string `json:"costCenter"`
 	Purpose           string `json:"purpose"`

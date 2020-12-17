@@ -53,8 +53,11 @@ func getBudget(c *gin.Context) {
 		return
 	}
 
+	year := c.Query("year")
+
 	respBody := []struct {
 		BudgetCode     string `json:"code"`
+		Year           int    `json:"year"`
 		BudgetDesc     string `json:"description"`
 		BudgetAmount   int64  `json:"amount"`
 		Remaining      int64  `json:"remaining"`
@@ -62,14 +65,28 @@ func getBudget(c *gin.Context) {
 		CostCenterDesc string `json:"costCenterDesc"`
 	}{}
 
-	err := db.Table("tb_budget as b").
-		Select("b.budget_code, b.budget_desc, b.budget_amount, b.remaining, b.cost_center, cc.description as cost_center_desc").
-		Joins("JOIN tb_ccenter as cc on b.cost_center = cc.ccenter").
-		Joins("JOIN cost_center_role as cr on cc.ccenter = cr.cost_center").
-		Joins("JOIN user_cost_center_role as ucr on cr.role = ucr.role").
-		Where("ucr.username = ?", username).
-		Order("b.budget_code").
-		Find(&respBody).Error
+	var err error
+
+	if year == "" {
+		err = db.Table("tb_budget as b").
+			Select("b.budget_code, b.budget_desc, b.budget_amount, b.remaining, b.cost_center, cc.description as cost_center_desc").
+			Joins("JOIN tb_ccenter as cc on b.cost_center = cc.ccenter").
+			Joins("JOIN cost_center_role as cr on cc.ccenter = cr.cost_center").
+			Joins("JOIN user_cost_center_role as ucr on cr.role = ucr.role").
+			Where("ucr.username = ?", username).
+			Order("b.budget_code").
+			Find(&respBody).Error
+	} else {
+		err = db.Table("tb_budget as b").
+			Select("b.budget_code, b.year, b.budget_desc, b.budget_amount, b.remaining, b.cost_center, cc.description as cost_center_desc").
+			Joins("JOIN tb_ccenter as cc on b.cost_center = cc.ccenter").
+			Joins("JOIN cost_center_role as cr on cc.ccenter = cr.cost_center").
+			Joins("JOIN user_cost_center_role as ucr on cr.role = ucr.role").
+			Where("ucr.username = ? AND b.year = ?", username, year).
+			Order("b.budget_code").
+			Find(&respBody).Error
+	}
+
 	if err != nil {
 		c.AbortWithError(http.StatusNotFound, errors.New("No Data"))
 		c.JSON(http.StatusNotFound, gin.H{
@@ -84,6 +101,7 @@ func getBudget(c *gin.Context) {
 func getCreateInfo(c *gin.Context) {
 	type budget struct {
 		BudgetCode   string `json:"budgetCode"`
+		Year         int    `json:"year"`
 		BudgetAmount int64  `json:"budgetAmount"`
 		Remaining    int64  `json:"budgetRemaining"`
 		OwnerName    string `json:"ownerName"`
@@ -132,6 +150,8 @@ func getCreateInfo(c *gin.Context) {
 		Uom  string `json:"uom"`
 		Desc string `json:"desc"`
 	}
+
+	year := c.Query("year")
 
 	infoBody := struct {
 		BudgetInfo     []budget     `json:"budgetInfo"`
@@ -212,7 +232,7 @@ func getCreateInfo(c *gin.Context) {
 		Select("b.budget_code, b.budget_amount, b.remaining, b.owner_name, b.pernr, b.position, b.cost_center, b.budget_desc").
 		Joins("JOIN cost_center_role as cr on b.cost_center = cr.cost_center").
 		Joins("JOIN user_cost_center_role as ucr on cr.role = ucr.role").
-		Where("ucr.username = ?", username).
+		Where("ucr.username = ? AND b.year = ?", username, year).
 		Order("b.cost_center").
 		Find(&infoBody.BudgetInfo).Error
 	if err != nil {
@@ -267,6 +287,8 @@ func getCapexTrxReport(c *gin.Context) {
 		return
 	}
 
+	year := c.Query("year")
+
 	costCenter := []struct {
 		CostCenter string
 	}{}
@@ -284,27 +306,40 @@ func getCapexTrxReport(c *gin.Context) {
 	}
 
 	var capexTrxAll = []struct {
-		ID          string `json:"id"`
-		CostCenter  string `json:"costCenter"`
-		Description string `json:"description"`
-		Quantity    int    `json:"quantity"`
-		Status      string `json:"status"`
-		BudgetCode  string `json:"budgetCode"`
-		Amount      int    `json:"amount"`
-		BudgetDesc  string `json:"budgetDesc"`
-		BudgetType  string `json:"budgetType"`
+		ID           string `json:"id"`
+		CostCenter   string `json:"costCenter"`
+		Description  string `json:"description"`
+		Quantity     int    `json:"quantity"`
+		Status       string `json:"status"`
+		BudgetCode   string `json:"budgetCode"`
+		Amount       int    `json:"amount"`
+		BudgetDesc   string `json:"budgetDesc"`
+		BudgetType   string `json:"budgetType"`
+		ActualAmount int    `json:"actualAmount"`
 	}{}
 
-	err := db.Table("capex_trx as ct").
-		Select("ct.id, ct.cost_center, ct.description, ct.quantity, ct.status, cb.budget_code, cb.amount, tb.budget_desc, ct.budget_type").
-		Joins("LEFT JOIN capex.capex_budget as cb on ct.id = cb.capex_id").
-		Joins("LEFT JOIN capex.tb_budget as tb on cb.budget_code = tb.budget_code").
-		Where("ct.cost_center IN (?)", filterCC).
-		Find(&capexTrxAll).
-		Error
+	var err error
+
+	if year == "" {
+		err = db.Table("capex_trx as ct").
+			Select("ct.id, ct.cost_center, ct.description, ct.quantity, ct.status, cb.budget_code, cb.amount, tb.budget_desc, ct.budget_type, cb.actual_amount").
+			Joins("LEFT JOIN capex.capex_budget as cb on ct.id = cb.capex_id").
+			Joins("LEFT JOIN capex.tb_budget as tb on cb.budget_code = tb.budget_code").
+			Where("ct.cost_center IN (?)", filterCC).
+			Find(&capexTrxAll).
+			Error
+	} else {
+		err = db.Table("capex_trx as ct").
+			Select("ct.id, ct.cost_center, ct.description, ct.quantity, ct.status, cb.budget_code, cb.amount, tb.budget_desc, ct.budget_type, cb.actual_amount").
+			Joins("LEFT JOIN capex.capex_budget as cb on ct.id = cb.capex_id").
+			Joins("LEFT JOIN capex.tb_budget as tb on cb.budget_code = tb.budget_code").
+			Where("ct.cost_center IN (?) AND ct.year = ?", filterCC, year).
+			Find(&capexTrxAll).
+			Error
+	}
+
 	if err != nil || len(capexTrxAll) <= 0 {
 		c.AbortWithStatus(404)
-		fmt.Println(err)
 	} else {
 		c.JSON(200, capexTrxAll)
 	}
