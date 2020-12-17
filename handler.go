@@ -69,7 +69,7 @@ func getBudget(c *gin.Context) {
 
 	if year == "" {
 		err = db.Table("tb_budget as b").
-			Select("b.budget_code, b.budget_desc, b.budget_amount, b.remaining, b.cost_center, cc.description as cost_center_desc").
+			Select("b.budget_code, b.date as year, b.budget_desc, b.budget_amount, b.remaining, b.cost_center, cc.description as cost_center_desc").
 			Joins("JOIN tb_ccenter as cc on b.cost_center = cc.ccenter").
 			Joins("JOIN cost_center_role as cr on cc.ccenter = cr.cost_center").
 			Joins("JOIN user_cost_center_role as ucr on cr.role = ucr.role").
@@ -78,11 +78,11 @@ func getBudget(c *gin.Context) {
 			Find(&respBody).Error
 	} else {
 		err = db.Table("tb_budget as b").
-			Select("b.budget_code, b.year, b.budget_desc, b.budget_amount, b.remaining, b.cost_center, cc.description as cost_center_desc").
+			Select("b.budget_code, b.date as year, b.budget_desc, b.budget_amount, b.remaining, b.cost_center, cc.description as cost_center_desc").
 			Joins("JOIN tb_ccenter as cc on b.cost_center = cc.ccenter").
 			Joins("JOIN cost_center_role as cr on cc.ccenter = cr.cost_center").
 			Joins("JOIN user_cost_center_role as ucr on cr.role = ucr.role").
-			Where("ucr.username = ? AND b.year = ?", username, year).
+			Where("ucr.username = ? AND b.date = ?", username, year).
 			Order("b.budget_code").
 			Find(&respBody).Error
 	}
@@ -232,7 +232,7 @@ func getCreateInfo(c *gin.Context) {
 		Select("b.budget_code, b.budget_amount, b.remaining, b.owner_name, b.pernr, b.position, b.cost_center, b.budget_desc").
 		Joins("JOIN cost_center_role as cr on b.cost_center = cr.cost_center").
 		Joins("JOIN user_cost_center_role as ucr on cr.role = ucr.role").
-		Where("ucr.username = ? AND b.year = ?", username, year).
+		Where("ucr.username = ? AND b.date = ?", username, year).
 		Order("b.cost_center").
 		Find(&infoBody.BudgetInfo).Error
 	if err != nil {
