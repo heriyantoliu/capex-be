@@ -563,7 +563,7 @@ func createCapexTrx(c *gin.Context) {
 
 				err = db.Table("tb_budget").
 					Select("budget_code, remaining").
-					Where("budget_code = ?", budget.BudgetCode).
+					Where("budget_code = ? and date = ?", budget.BudgetCode, capexTrx.Year).
 					First(&tbBudget).
 					Error
 				if err != nil {
@@ -613,7 +613,7 @@ func createCapexTrx(c *gin.Context) {
 
 		for _, budget := range tbBudgets {
 			err = tx.Table("tb_budget").
-				Where("budget_code = ?", budget.BudgetCode).
+				Where("budget_code = ? and date = ?", budget.BudgetCode, capexTrx.Year).
 				Updates(map[string]interface{}{"remaining": budget.Remaining}).Error
 			if err != nil {
 				tx.Rollback()
@@ -913,7 +913,7 @@ func updateCapexTrx(c *gin.Context) {
 					// } else {
 					err = db.Table("tb_budget").
 						Select("budget_code, remaining").
-						Where("budget_code = ?", budget.BudgetCode).
+						Where("budget_code = ? and date = ?", budget.BudgetCode, capexTrx.Year).
 						First(&tbBudget).Error
 					if err != nil {
 						c.AbortWithError(http.StatusNotFound, errors.New("budget code tidak valid"))
@@ -976,7 +976,7 @@ func updateCapexTrx(c *gin.Context) {
 		if capexTrx.Status == "ACC" {
 			for _, budget := range tbBudgets {
 				err = tx.Table("tb_budget").
-					Where("budget_code = ?", budget.BudgetCode).
+					Where("budget_code = ? and date = ?", budget.BudgetCode, capexTrx.Year).
 					Updates(map[string]interface{}{"remaining": budget.Remaining}).Error
 				if err != nil {
 					tx.Rollback()
