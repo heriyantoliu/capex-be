@@ -78,6 +78,7 @@ type CapexBudget struct {
 	Amount       uint64 `json:"amount"`
 	Remaining    int64  `json:"remaining"`
 	ActualAmount uint64 `json:"actualAmount"`
+	MainBudget   bool   `json:"mainBudget"`
 }
 type CapexAttachment struct {
 	CapexID   uint64 `gorm:"primary_key;auto_increment:false" json:"capexId"`

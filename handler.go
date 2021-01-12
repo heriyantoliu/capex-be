@@ -63,13 +63,14 @@ func getBudget(c *gin.Context) {
 		Remaining      int64  `json:"remaining"`
 		CostCenter     string `json:"costCenter"`
 		CostCenterDesc string `json:"costCenterDesc"`
+		Switched       bool   `json:"switched"`
 	}{}
 
 	var err error
 
 	if year == "" {
 		err = db.Table("tb_budget as b").
-			Select("b.budget_code, b.date as year, b.budget_desc, b.budget_amount, b.remaining, b.cost_center, cc.description as cost_center_desc").
+			Select("b.budget_code, b.date as year, b.budget_desc, b.budget_amount, b.remaining, b.cost_center, cc.description as cost_center_desc, b.switched").
 			Joins("JOIN tb_ccenter as cc on b.cost_center = cc.ccenter").
 			Joins("JOIN cost_center_role as cr on cc.ccenter = cr.cost_center").
 			Joins("JOIN user_cost_center_role as ucr on cr.role = ucr.role").
@@ -78,7 +79,7 @@ func getBudget(c *gin.Context) {
 			Find(&respBody).Error
 	} else {
 		err = db.Table("tb_budget as b").
-			Select("b.budget_code, b.date as year, b.budget_desc, b.budget_amount, b.remaining, b.cost_center, cc.description as cost_center_desc").
+			Select("b.budget_code, b.date as year, b.budget_desc, b.budget_amount, b.remaining, b.cost_center, cc.description as cost_center_desc, b.switched").
 			Joins("JOIN tb_ccenter as cc on b.cost_center = cc.ccenter").
 			Joins("JOIN cost_center_role as cr on cc.ccenter = cr.cost_center").
 			Joins("JOIN user_cost_center_role as ucr on cr.role = ucr.role").
@@ -109,6 +110,7 @@ func getCreateInfo(c *gin.Context) {
 		Position     string `json:"position"`
 		CostCenter   string `json:"costCenter"`
 		BudgetDesc   string `json:"budgetDesc"`
+		Switched     bool   `json:"switched"`
 	}
 
 	type purpose struct {
@@ -229,7 +231,7 @@ func getCreateInfo(c *gin.Context) {
 	}
 
 	err = db.Table("tb_budget as b").
-		Select("b.budget_code, b.budget_amount, b.remaining, b.owner_name, b.pernr, b.position, b.cost_center, b.budget_desc").
+		Select("b.budget_code, b.budget_amount, b.remaining, b.owner_name, b.pernr, b.position, b.cost_center, b.budget_desc, b.switched").
 		Joins("JOIN cost_center_role as cr on b.cost_center = cr.cost_center").
 		Joins("JOIN user_cost_center_role as ucr on cr.role = ucr.role").
 		Where("ucr.username = ? AND b.date = ?", username, year).
@@ -550,10 +552,12 @@ func createCapexTrx(c *gin.Context) {
 	tbBudget := struct {
 		BudgetCode string
 		Remaining  int64
+		Switched   bool
 	}{}
 	tbBudgets := []struct {
 		BudgetCode string
 		Remaining  int64
+		Switched   bool
 	}{}
 
 	if capexTrx.Status == "ACC" {
@@ -600,6 +604,7 @@ func createCapexTrx(c *gin.Context) {
 			saveCapexBudget.CostCenter = budget.CostCenter
 			saveCapexBudget.Amount = budget.Amount
 			saveCapexBudget.Remaining = budget.Remaining
+			saveCapexBudget.MainBudget = budget.MainBudget
 			err = tx.Create(&saveCapexBudget).Error
 			if err != nil {
 				tx.Rollback()
@@ -609,12 +614,27 @@ func createCapexTrx(c *gin.Context) {
 				})
 				return
 			}
+
+			if !budget.MainBudget {
+				err = tx.Table("tb_budget").
+					Where("budget_code = ? and date = ?", budget.BudgetCode, capexTrx.Year).
+					Updates(map[string]interface{}{"switched": "1"}).Error
+				if err != nil {
+					tx.Rollback()
+					c.AbortWithError(http.StatusInternalServerError, err)
+					c.JSON(http.StatusInternalServerError, gin.H{
+						"message": err.Error(),
+					})
+					return
+				}
+			}
+
 		}
 
 		for _, budget := range tbBudgets {
 			err = tx.Table("tb_budget").
 				Where("budget_code = ? and date = ?", budget.BudgetCode, capexTrx.Year).
-				Updates(map[string]interface{}{"remaining": budget.Remaining}).Error
+				Updates(map[string]interface{}{"remaining": budget.Remaining, "switched": budget.Switched}).Error
 			if err != nil {
 				tx.Rollback()
 				c.AbortWithError(http.StatusInternalServerError, err)
@@ -654,6 +674,7 @@ func createCapexTrx(c *gin.Context) {
 			saveCapexBudget.BudgetCode = budget.BudgetCode
 			saveCapexBudget.CostCenter = budget.CostCenter
 			saveCapexBudget.Amount = budget.Amount
+			saveCapexBudget.MainBudget = budget.MainBudget
 			err = tx.Create(&saveCapexBudget).Error
 			if err != nil {
 				tx.Rollback()
@@ -662,6 +683,20 @@ func createCapexTrx(c *gin.Context) {
 					"message": err.Error(),
 				})
 				return
+			}
+
+			if !budget.MainBudget {
+				err = tx.Table("tb_budget").
+					Where("budget_code = ? and date = ?", budget.BudgetCode, capexTrx.Year).
+					Updates(map[string]interface{}{"switched": "1"}).Error
+				if err != nil {
+					tx.Rollback()
+					c.AbortWithError(http.StatusInternalServerError, err)
+					c.JSON(http.StatusInternalServerError, gin.H{
+						"message": err.Error(),
+					})
+					return
+				}
 			}
 		}
 
@@ -872,10 +907,12 @@ func updateCapexTrx(c *gin.Context) {
 		tbBudget := struct {
 			BudgetCode string
 			Remaining  int64
+			Switched   bool
 		}{}
 		tbBudgets := []struct {
 			BudgetCode string
 			Remaining  int64
+			Switched   bool
 		}{}
 
 		if capexTrx.BudgetType == "B" {
@@ -945,6 +982,27 @@ func updateCapexTrx(c *gin.Context) {
 			return
 		}
 
+		if capexTrx.Status == "D" {
+			var tempCapexBudget []CapexBudget
+			db.Where("capex_id = ?", capexTrx.ID).Find(&tempCapexBudget)
+			for _, budget := range tempCapexBudget {
+				if !budget.MainBudget {
+					err = tx.Table("tb_budget").
+						Where("budget_code = ? and date = ?", budget.BudgetCode, capexTrx.Year).
+						Updates(map[string]interface{}{"switched": "0"}).Error
+					if err != nil {
+						tx.Rollback()
+						c.AbortWithError(http.StatusInternalServerError, err)
+						c.JSON(http.StatusInternalServerError, gin.H{
+							"message": err.Error(),
+						})
+						return
+					}
+				}
+
+			}
+		}
+
 		err = tx.Delete(CapexBudget{}, "capex_id = ?", capexTrx.ID).Error
 		if err != nil {
 			tx.Rollback()
@@ -962,6 +1020,7 @@ func updateCapexTrx(c *gin.Context) {
 			saveCapexBudget.CostCenter = budget.CostCenter
 			saveCapexBudget.Amount = budget.Amount
 			saveCapexBudget.Remaining = budget.Remaining
+			saveCapexBudget.MainBudget = budget.MainBudget
 			err = tx.Create(&saveCapexBudget).Error
 			if err != nil {
 				tx.Rollback()
@@ -970,6 +1029,20 @@ func updateCapexTrx(c *gin.Context) {
 					"message": err.Error(),
 				})
 				return
+			}
+
+			if !budget.MainBudget {
+				err = tx.Table("tb_budget").
+					Where("budget_code = ? and date = ?", budget.BudgetCode, capexTrx.Year).
+					Updates(map[string]interface{}{"switched": "1"}).Error
+				if err != nil {
+					tx.Rollback()
+					c.AbortWithError(http.StatusInternalServerError, err)
+					c.JSON(http.StatusInternalServerError, gin.H{
+						"message": err.Error(),
+					})
+					return
+				}
 			}
 		}
 
