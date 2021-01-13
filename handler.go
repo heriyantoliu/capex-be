@@ -634,7 +634,7 @@ func createCapexTrx(c *gin.Context) {
 		for _, budget := range tbBudgets {
 			err = tx.Table("tb_budget").
 				Where("budget_code = ? and date = ?", budget.BudgetCode, capexTrx.Year).
-				Updates(map[string]interface{}{"remaining": budget.Remaining, "switched": budget.Switched}).Error
+				Updates(map[string]interface{}{"remaining": budget.Remaining}).Error
 			if err != nil {
 				tx.Rollback()
 				c.AbortWithError(http.StatusInternalServerError, err)
