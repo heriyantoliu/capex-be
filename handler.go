@@ -64,13 +64,14 @@ func getBudget(c *gin.Context) {
 		CostCenter     string `json:"costCenter"`
 		CostCenterDesc string `json:"costCenterDesc"`
 		Switched       bool   `json:"switched"`
+		Quantity       int64  `json:"quantity"`
 	}{}
 
 	var err error
 
 	if year == "" {
 		err = db.Table("tb_budget as b").
-			Select("b.budget_code, b.date as year, b.budget_desc, b.budget_amount, b.remaining, b.cost_center, cc.description as cost_center_desc, b.switched").
+			Select("b.budget_code, b.date as year, b.budget_desc, b.budget_amount, b.remaining, b.cost_center, cc.description as cost_center_desc, b.switched, b.quantity").
 			Joins("JOIN tb_ccenter as cc on b.cost_center = cc.ccenter").
 			Joins("JOIN cost_center_role as cr on cc.ccenter = cr.cost_center").
 			Joins("JOIN user_cost_center_role as ucr on cr.role = ucr.role").
@@ -79,7 +80,7 @@ func getBudget(c *gin.Context) {
 			Find(&respBody).Error
 	} else {
 		err = db.Table("tb_budget as b").
-			Select("b.budget_code, b.date as year, b.budget_desc, b.budget_amount, b.remaining, b.cost_center, cc.description as cost_center_desc, b.switched").
+			Select("b.budget_code, b.date as year, b.budget_desc, b.budget_amount, b.remaining, b.cost_center, cc.description as cost_center_desc, b.switched, b.quantity").
 			Joins("JOIN tb_ccenter as cc on b.cost_center = cc.ccenter").
 			Joins("JOIN cost_center_role as cr on cc.ccenter = cr.cost_center").
 			Joins("JOIN user_cost_center_role as ucr on cr.role = ucr.role").
@@ -111,6 +112,7 @@ func getCreateInfo(c *gin.Context) {
 		CostCenter   string `json:"costCenter"`
 		BudgetDesc   string `json:"budgetDesc"`
 		Switched     bool   `json:"switched"`
+		Quantity     int64  `json:"quantity"`
 	}
 
 	type purpose struct {
@@ -231,7 +233,7 @@ func getCreateInfo(c *gin.Context) {
 	}
 
 	err = db.Table("tb_budget as b").
-		Select("b.budget_code, b.budget_amount, b.remaining, b.owner_name, b.pernr, b.position, b.cost_center, b.budget_desc, b.switched").
+		Select("b.budget_code, b.budget_amount, b.remaining, b.owner_name, b.pernr, b.position, b.cost_center, b.budget_desc, b.switched, b.quantity").
 		Joins("JOIN cost_center_role as cr on b.cost_center = cr.cost_center").
 		Joins("JOIN user_cost_center_role as ucr on cr.role = ucr.role").
 		Where("ucr.username = ? AND b.date = ?", username, year).
