@@ -1597,7 +1597,7 @@ func rejectCapex(c *gin.Context) {
 	for _, budget := range capexBudget {
 		err = tx.Table("tb_budget").
 			Where("budget_code = ?", budget.BudgetCode).
-			Updates(map[string]interface{}{"remaining": gorm.Expr("remaining + ?", budget.Amount)}).
+			Updates(map[string]interface{}{"remaining": gorm.Expr("remaining + ?", budget.Amount), "switched": "0"}).
 			Error
 		if err != nil {
 			tx.Rollback()
