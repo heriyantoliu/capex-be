@@ -37,6 +37,7 @@ type CapexTrx struct {
 	AssetGroup        string `json:"assetGroup"`
 	AssetGenMode      string `json:"assetGenMode"`
 	AssetNote         string `json:"assetNote"`
+	Switched          bool   `json:"switched"`
 }
 
 type UserRole struct {

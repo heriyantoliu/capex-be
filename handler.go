@@ -320,13 +320,14 @@ func getCapexTrxReport(c *gin.Context) {
 		BudgetDesc   string `json:"budgetDesc"`
 		BudgetType   string `json:"budgetType"`
 		ActualAmount int    `json:"actualAmount"`
+		Switched     bool   `json:"switched"`
 	}{}
 
 	var err error
 
 	if year == "" {
 		err = db.Table("capex_trx as ct").
-			Select("ct.id, ct.cost_center, ct.description, ct.quantity, ct.status, cb.budget_code, cb.amount, tb.budget_desc, ct.budget_type, cb.actual_amount").
+			Select("ct.id, ct.cost_center, ct.description, ct.quantity, ct.status, cb.budget_code, cb.amount, tb.budget_desc, ct.budget_type, cb.actual_amount, ct.switched").
 			Joins("LEFT JOIN capex.capex_budget as cb on ct.id = cb.capex_id").
 			Joins("LEFT JOIN capex.tb_budget as tb on cb.budget_code = tb.budget_code").
 			Where("ct.cost_center IN (?)", filterCC).
@@ -334,7 +335,7 @@ func getCapexTrxReport(c *gin.Context) {
 			Error
 	} else {
 		err = db.Table("capex_trx as ct").
-			Select("ct.id, ct.cost_center, ct.description, ct.quantity, ct.status, cb.budget_code, cb.amount, tb.budget_desc, ct.budget_type, cb.actual_amount").
+			Select("ct.id, ct.cost_center, ct.description, ct.quantity, ct.status, cb.budget_code, cb.amount, tb.budget_desc, ct.budget_type, cb.actual_amount, ct.switched").
 			Joins("LEFT JOIN capex.capex_budget as cb on ct.id = cb.capex_id").
 			Joins("LEFT JOIN capex.tb_budget as tb on cb.budget_code = tb.budget_code").
 			Where("ct.cost_center IN (?) AND ct.year = ?", filterCC, year).
@@ -544,6 +545,14 @@ func createCapexTrx(c *gin.Context) {
 	capexTrx = respBody.Capex
 	capexBudget = respBody.BudgetCode
 	capexTrx.CreatedBy = username
+	capexTrx.Switched = false
+
+	for _, budget := range capexBudget {
+		if !budget.MainBudget {
+			capexTrx.Switched = true
+			break
+		}
+	}
 
 	var user User
 
@@ -901,10 +910,17 @@ func updateCapexTrx(c *gin.Context) {
 		capexTrx.AssetActivityType = resBody.AssetActivityType
 		capexTrx.ForeignAmount = resBody.ForeignAmount
 		capexTrx.ForeignCurrency = resBody.ForeignCurrency
-
 		capexTrx.Status = resBody.Status
+		capexTrx.Switched = false
 
 		capexBudget := resBody.Budget
+
+		for _, budget := range capexBudget {
+			if !budget.MainBudget {
+				capexTrx.Switched = true
+				break
+			}
+		}
 
 		tbBudget := struct {
 			BudgetCode string
