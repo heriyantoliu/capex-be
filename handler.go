@@ -4,6 +4,7 @@ import (
 	"capex/export"
 	"capex/notification"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -1809,6 +1810,7 @@ func createUser(c *gin.Context) {
 }
 
 func createAttachment(c *gin.Context) {
+
 	capexID := c.Param("id")
 
 	form, err := c.MultipartForm()
@@ -1820,7 +1822,23 @@ func createAttachment(c *gin.Context) {
 		return
 	}
 
+	// log.Println(form)
+
+	type attachmentBody struct {
+		Name     string `json:"name"`
+		Category string `json:"category"`
+	}
+
 	files := form.File["files"]
+	rawData := form.Value["rawData"]
+
+	var attachmentData = attachmentBody{}
+	var attachmentsData = []attachmentBody{}
+
+	for _, data := range rawData {
+		err = json.Unmarshal([]byte(data), &attachmentData)
+		attachmentsData = append(attachmentsData, attachmentData)
+	}
 
 	if len(files) == 0 {
 		return
@@ -1849,6 +1867,12 @@ func createAttachment(c *gin.Context) {
 		}
 		capexAttachment.CapexID, _ = strconv.ParseUint(capexID, 10, 64)
 		capexAttachment.Filename = file.Filename
+		for _, data := range attachmentsData {
+			if data.Name == file.Filename {
+				capexAttachment.Category = data.Category
+			}
+
+		}
 
 		db.Create(&capexAttachment)
 	}

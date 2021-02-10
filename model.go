@@ -84,6 +84,7 @@ type CapexBudget struct {
 type CapexAttachment struct {
 	CapexID   uint64 `gorm:"primary_key;auto_increment:false" json:"capexId"`
 	Filename  string `gorm:"primary_key" json:"filename"`
+	Category  string `json:"category"`
 	CreatedAt time.Time
 }
 
